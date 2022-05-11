@@ -14,7 +14,7 @@ class ContrastiveLoss(nn.Module):
 class NASLoss(nn.Module):
 
     def __init__(self, criterion_type = "cross-entropy", temperature = 0.7):
-        super(NASLoss).__init__(self)
+        super(NASLoss, self).__init__()
         
         self.temperature = temperature
         self.criterion_type = criterion_type
@@ -23,4 +23,4 @@ class NASLoss(nn.Module):
             self.criterion = nn.CrossEntropyLoss()
         
     def forward(self, outputs, labels):
-        return self.criterion(output, labels)
+        return self.criterion(outputs, labels)

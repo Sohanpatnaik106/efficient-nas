@@ -32,14 +32,25 @@ __all__ = [
 
 class BaseModel(nn.Module):
 
-    def __init__(self):
+    def __init__(self, model_name, model_config, num_classes = 100, init_weights = True, dropout = 0.5, 
+                batch_norm = True, weights = None, progress = True):
+        super(BaseModel, self).__init__()
+        
+        self.model_name = model_name
+        self.model_config = model_config
+        self.num_classes = num_classes
+        self.init_weights = init_weights
+        self.dropout = dropout
+        self.batch_norm = batch_norm
+        self.weights = weights
+        self.progress = progress
 
+        if "vgg" in self.model_name:
+            self.model = _vgg(self.model_config, batch_norm, weights, progress, num_classes = self.num_classes, 
+                            init_weights = self.init_weights, dropout = self.dropout)
 
-        pass
-
-    def forward(self, image):
-
-        pass
+    def forward(self, images):
+        return self.model(images)
 
 class VGG(nn.Module):
     def __init__(
@@ -87,7 +98,7 @@ class VGG(nn.Module):
         return x
 
 
-def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:
+def make_layers(cfg: str, batch_norm: bool = False) -> nn.Sequential:
     
     layers: List[nn.Module] = []
     in_channels = 3
@@ -108,15 +119,18 @@ def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequ
     
     return nn.Sequential(*layers)
 
-def _vgg(cfg: str, batch_norm: bool, weights, progress: bool, **kwargs: Any) -> VGG:
+def _vgg(cfg: str, batch_norm: bool, weights, progress: bool, 
+        num_classes: int = 1000, init_weights: bool = True, dropout: float = 0.5) -> VGG:
     
+    kwargs = {}
     if weights is not None:
     
         kwargs["init_weights"] = False
         if weights.meta["categories"] is not None:
             _ovewrite_named_param(kwargs, "num_classes", len(weights.meta["categories"]))
     
-    model = VGG(make_layers(cfg, batch_norm=batch_norm), **kwargs)
+    model = VGG(make_layers(cfg, batch_norm=batch_norm), 
+                num_classes = num_classes, init_weights = init_weights, dropout = dropout)
     
     if weights is not None:
         model.load_state_dict(weights.get_state_dict(progress=progress))
