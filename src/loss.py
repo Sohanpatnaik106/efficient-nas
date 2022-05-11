@@ -3,6 +3,14 @@ import torch.nn as nn
 
 # TODO: Implemement training using contrastive loss as well
 
+class ContrastiveLoss(nn.Module):
+
+    def __init__(self, temperature):
+        pass
+
+    def forward(self, outputs, labels):
+        pass
+
 class NASLoss(nn.Module):
 
     def __init__(self, criterion_type = "cross-entropy", temperature = 0.7):

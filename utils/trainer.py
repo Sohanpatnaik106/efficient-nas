@@ -9,7 +9,7 @@ from src.model import BaseModel, _vgg
 class NASTrainer():
 
     def __init__(self, train_dataloader, validation_dataloader, test_dataloader, model_name, search_space, 
-                num_epochs = 180, device = "cpu", optimizer_type = "Adam"):
+                num_epochs = 180, learning_rate = 1e-4, weight_decay = 1e-4, device = "cpu", optimizer_type = "Adam"):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -17,15 +17,23 @@ class NASTrainer():
         self.model_name = model_name
         self.search_space = search_space
         self.num_epochs = num_epochs
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.device = device
         self.optimizer_type = optimizer_type
 
         self.criterion = NASLoss()
 
-        # TODO: Set the optimizer
-        
+        self.num_configs = len(self.search_space)
+        self.sample_probabilities = np.ones((self.num_configs), dtype = np.float32) / self.num_configs
 
-        self.sample_probabilities = np.zeros(len(self.search_space), dtype = np.float32)
+    # NOTE: Everytime a new model is sampled, re initialise the optimizer    
+    def set_optimizer(self, model):
+        if self.optimizer_type == "Adam":
+            optimizer = torch.optim.Adam(lr = self.learning_rate, weight_decay = self.weight_decay)
 
+        return optimizer
+    
     def sample_architecture(self):
 
         sample_idx = np.argmax(self.sample_probabilities)
