@@ -35,7 +35,7 @@ class BaseModel(nn.Module):
     def __init__(self, model_name, model_config, num_classes = 100, init_weights = True, dropout = 0.5, 
                 batch_norm = True, weights = None, progress = True):
         super(BaseModel, self).__init__()
-        
+
         self.model_name = model_name
         self.model_config = model_config
         self.num_classes = num_classes
@@ -46,7 +46,7 @@ class BaseModel(nn.Module):
         self.progress = progress
 
         if "vgg" in self.model_name:
-            self.model = _vgg(self.model_config, batch_norm, weights, progress, num_classes = self.num_classes, 
+            self.model = _vgg(self.model_config, self.batch_norm, self.weights, self.progress, num_classes = self.num_classes, 
                             init_weights = self.init_weights, dropout = self.dropout)
 
     def forward(self, images):
@@ -96,7 +96,6 @@ class VGG(nn.Module):
         x = self.classifier(x)
         
         return x
-
 
 def make_layers(cfg: str, batch_norm: bool = False) -> nn.Sequential:
     

@@ -48,7 +48,7 @@ class NASTrainer():
     def sample_architecture(self):
 
         sample_idx = np.argmax(self.sample_probabilities)
-        return self.search_space[str(sample_idx)]
+        return sample_idx, self.search_space[str(sample_idx)]
 
     def create_model(self, model, model_config):
 
@@ -58,8 +58,15 @@ class NASTrainer():
 
         new_model = BaseModel(self.model_name, model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
                         dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
-        new_model.model.load_state_dict(model.model.load_state_dict)
+        new_model = self.copy_parameters(model, new_model)
     
+        return new_model
+
+    def copy_parameters(self, model, new_model):
+
+        for (name, param), (name_new, param_new) in zip(model.named_parameters(), new_model.named_parameters()):
+            param_new.data = param.data
+
         return new_model
 
     def update_sampling_likelihood(self, model, dataloader_type = "train"):
@@ -69,11 +76,13 @@ class NASTrainer():
         # and updating the likelihood
 
         accuracies = []
-        for model_config in self.search_space:
+        for idx, model_config in self.search_space.items():
+
             new_model = BaseModel(self.model_name, model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
                                 dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
-            new_model.model.load_state_dict(model.model.load_state_dict)
-            accuracy = self.evaluate(new_model)
+            new_model = self.copy_parameters(model, new_model)
+
+            accuracy = self.evaluate(new_model, model_idx = idx)
             accuracies.append(accuracy)
 
         accuracies = np.array(accuracies)
@@ -91,10 +100,11 @@ class NASTrainer():
         for epoch in range(self.num_epochs):
             
             if epoch != 0:
-                model_config = self.sample_architecture()
+                sample_idx, model_config = self.sample_architecture()
                 model = self.create_model(model, model_config)
                 model.to(self.device)
             else:
+                sample_idx = 0
                 model_config = self.search_space["0"]
             
             optimizer = self.set_optimizer(model)
@@ -112,15 +122,18 @@ class NASTrainer():
 
                     total_loss += loss.item()
                     tepoch.set_postfix(loss = total_loss / (i+1))
-                
-            self.update_sampling_likelihood(model, dataloader_type = "train")
-            train_accuracy = self.evaluate(model, dataloader_type = "train")
-            validation_accuracy = self.evaluate(model, dataloader_type = "val")
-            test_accuracy = self.evaluate(model, dataloader_type = "test")
-
-            print(f"Train accuracy: {train_accuracy}, validation accuracy: {validation_accuracy}, test_accuracy: {test_accuracy}")
             
-    def evaluate(self, model, dataloader_type = "train"):
+            # NOTE: Probability can be updated after every fixed number of batches instead of epochs
+            print("\n")
+            self.update_sampling_likelihood(model, dataloader_type = "train")
+            print("\n")
+            train_accuracy = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
+            validation_accuracy = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
+            test_accuracy = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
+
+            print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
+            
+    def evaluate(self, model, dataloader_type = "train", model_idx = "0"):
 
         if dataloader_type == "train":
             dataloader = self.train_dataloader
@@ -129,24 +142,26 @@ class NASTrainer():
         elif dataloader_type == "test":
             dataloader = self.test_dataloader
 
+        total_loss = 0
         total = 0
+        correct = 0
+        model.to(self.device)
+
         with tqdm(dataloader, unit = "batch", position = 0, leave = True) as tepoch:
             for i, (images, labels) in enumerate(tepoch):
-                tepoch.set_description(f"Epoch {epoch + 1}")
-                
-                outputs = model(images.to(self.device))
-                loss = criterion(outputs.to(self.device), labels.to(self.device))
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
+                tepoch.set_description(f"Model {model_idx}: Eval on {dataloader_type}")
 
+                outputs = model(images.to(self.device))
+                loss = self.criterion(outputs.to(self.device), labels.to(self.device))
                 total_loss += loss.item()
+                
                 tepoch.set_postfix(loss = total_loss / (i+1))
 
                 _, predicted = torch.max(outputs, dim = 1)
                 total += labels.size(0)
 
-                correct += (predicted == labels).sum().item()
+                correct += (predicted == labels.to(self.device)).sum().item()
+                tepoch.set_postfix(acc = correct / total)
 
         accuracy = correct / total
         return accuracy

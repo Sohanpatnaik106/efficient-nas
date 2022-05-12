@@ -1,17 +1,14 @@
 import os
-import sys
 import torch
 import argparse
-from src.model import cfgs
-from utils.search_space import PoolSearchSpace
-from utils.env import set_seed
-from src.model import _vgg
-from data.dataloader import CIFAR100
 import torchvision
-from torchvision import transforms
-from torch.utils.data import DataLoader
 import numpy as np
-from src.model import BaseModel
+from src.model import cfgs
+from utils.env import set_seed
+from torchvision import transforms
+from data.dataloader import CIFAR100
+from torch.utils.data import DataLoader
+from utils.search_space import PoolSearchSpace
 
 from utils.trainer import NASTrainer
 
@@ -19,7 +16,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_norm", default = True, type = bool)
-    parser.add_argument("--batch_size", default = 128, type = int)
+    parser.add_argument("--batch_size", default = 256, type = int)
     parser.add_argument("--criterion_type", default = "cross-entropy", type = str)
     parser.add_argument("--data_path", default = "./datasets/cifar100/", type = str)
     parser.add_argument("--download_data", default = False, type = bool)
@@ -40,12 +37,16 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", default = 1e-4, type = float)
 
     args = parser.parse_args()
+    print("\nArguments List:")
+    print(args)
+    print("\n")
+
     set_seed(args.seed)
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    model_config = cfgs["E"]
-    pool_search_space = PoolSearchSpace("vgg19", model_config, num_configs = 100)
+    model_config = cfgs[args.model_config]
+    pool_search_space = PoolSearchSpace("vgg19", model_config, num_configs = args.num_configs)
     pool_search_space.create_search_space()
     
     transform = transforms.Compose([
@@ -70,14 +71,5 @@ if __name__ == "__main__":
                 batch_norm = args.batch_norm, weights = None, progress = args.progress, num_epochs = args.num_epochs, 
                 learning_rate = args.learning_rate, weight_decay = args.weight_decay, device = device, 
                 optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature)
-
-    # model = _vgg(pool_search_space.search_space["0"], args.batch_norm, None, args.progress, num_classes = args.num_classes)
-    # print(model)
-    # exit(0)
-
-    # model = BaseModel(args.model_name, pool_search_space.search_space["0"], num_classes = args.num_classes, init_weights = args.init_weights, 
-    #                     dropout = args.dropout, batch_norm = args.batch_norm, weights = None, progress = args.progress)
-
-    # print(model.model)
 
     trainer.train()
