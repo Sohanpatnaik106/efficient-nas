@@ -121,7 +121,7 @@ class NASTrainer():
 
         for epoch in range(self.num_epochs):
             
-            if epoch != 0:
+            if epoch != 0 and not self.batch_update:
                 sample_idx, model_config = self.sample_architecture()
                 model = self.create_model(model, model_config)
                 model.to(self.device)
@@ -147,16 +147,31 @@ class NASTrainer():
                     total_loss += loss.item()
                     tepoch.set_postfix(loss = total_loss / (i+1))
 
-            # NOTE: Probability can be updated after every fixed number of batches instead of epochs
-            print("\n")
-            self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
-            print("\n")
-            train_accuracy = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
-            validation_accuracy = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
-            test_accuracy = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
+                    if self.batch_update:
+                        self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
+                        print("\n")
+                        train_accuracy = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
+                        validation_accuracy = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
+                        test_accuracy = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
 
-            print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
+                        print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
+
+                        sample_idx, model_config = self.sample_architecture()
+                        model = self.create_model(model, model_config)
+                        model.to(self.device)
+
+            # NOTE: Probability can be updated after every fixed number of batches instead of epochs
+            if not self.batch_update:
+                print("\n")
+                self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
+                print("\n")
+                train_accuracy = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
+                validation_accuracy = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
+                test_accuracy = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
+
+                print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
             
+
     def evaluate(self, model, dataloader_type = "train", model_idx = "0"):
 
         if dataloader_type == "train":

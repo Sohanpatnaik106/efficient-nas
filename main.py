@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_norm", default = True, type = bool)
-    parser.add_argument("--batch_size", default = 1024, type = int)
+    parser.add_argument("--batch_size", default = 64, type = int)
     parser.add_argument("--batch_update", default = True, type = bool)
     parser.add_argument("--criterion_type", default = "cross-entropy", type = str)
     parser.add_argument("--data_path", default = "./datasets/cifar100/", type = str)
