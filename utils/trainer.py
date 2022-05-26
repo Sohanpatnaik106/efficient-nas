@@ -5,6 +5,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from src.loss import NASLoss
 from src.model import BaseModel, _vgg
+from .visualise import plot_sampling_prob_dist
 
 # TODO: Implement the batch wise updation of sampling likelihoods. 
 # Change the print and progress bar structure.
@@ -15,7 +16,8 @@ class NASTrainer():
                 num_classes = 100, init_weights = True, dropout = 0.5, batch_norm = True, 
                 weights = None, progress = True, num_epochs = 180, learning_rate = 1e-4, weight_decay = 1e-4, 
                 device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7,
-                prob_dist = "maximum", eval_all = False, batch_update = True):
+                prob_dist = "maximum", eval_all = False, batch_update = True, 
+                visualisation_dir = "./visualisation/epoch_sample", seed = 0):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -39,6 +41,14 @@ class NASTrainer():
         self.prob_dist = prob_dist
         self.eval_all = eval_all
         self.batch_update = batch_update
+        self.seed = seed
+
+        self.visualisation_dir = visualisation_dir
+        if not os.path.exists(self.visualisation_dir):
+            os.makedirs(self.visualisation_dir)
+        self.visualisation_dir = os.path.join(self.visualisation_dir, f"seed_{seed}")
+        if not os.path.exists(self.visualisation_dir):
+            os.makedirs(self.visualisation_dir)
 
         self.criterion = NASLoss(criterion_type = self.criterion_type, temperature = self.temperature)
 
@@ -171,6 +181,8 @@ class NASTrainer():
 
                 print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
             
+            # Plot the probability distribution after every epoch
+            plot_sampling_prob_dist(self.sample_probabilities, epoch+1, self.num_configs, self.visualisation_dir)
 
     def evaluate(self, model, dataloader_type = "train", model_idx = "0"):
 

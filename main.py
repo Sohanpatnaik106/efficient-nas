@@ -19,7 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_norm", default = True, type = bool)
     parser.add_argument("--batch_sampling_size", default = 20, type = int)
     parser.add_argument("--batch_size", default = 64, type = int)
-    parser.add_argument("--batch_update", default = True, type = bool)
+    parser.add_argument("--batch_update", default = False, type = bool)
     parser.add_argument("--criterion_type", default = "cross-entropy", type = str)
     parser.add_argument("--data_path", default = "./datasets/cifar100/", type = str)
     parser.add_argument("--download_data", default = False, type = bool)
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     print(args, end = "\n")
 
     set_seed(args.seed)
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
     transform = transforms.Compose([
                         transforms.ToTensor(),
