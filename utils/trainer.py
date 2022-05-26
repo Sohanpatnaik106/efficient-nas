@@ -7,7 +7,7 @@ from src.loss import NASLoss
 from src.model import BaseModel, _vgg
 
 # TODO: Implement the batch wise updation of sampling likelihoods. 
-# Change the print and progress bar structure. 
+# Change the print and progress bar structure.
 
 class NASTrainer():
 
@@ -215,3 +215,106 @@ class NASTrainer():
             best_configs[str(idx)] = self.search_space[str(idx)]
         
         return best_configs
+
+class Trainer():
+
+    def __init__(self, train_dataloader, validation_dataloader, test_dataloader, model_config, model_name, 
+                num_classes = 100, init_weights = True, dropout = 0.5, batch_norm = True, 
+                weights = None, progress = True, num_epochs = 180, learning_rate = 1e-4, weight_decay = 1e-4, 
+                device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7):
+
+        self.train_dataloader = train_dataloader
+        self.validation_dataloader = validation_dataloader
+        self.test_dataloader = test_dataloader
+
+        self.model_name = model_name
+        self.model_config = model_config
+        self.num_classes = num_classes
+        self.init_weights = init_weights
+        self.dropout = dropout
+        self.batch_norm = batch_norm
+        self.weights = weights
+        self.progress = progress
+        
+        self.num_epochs = num_epochs
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.device = device
+        self.optimizer_type = optimizer_type
+        self.criterion_type = criterion_type
+        self.temperature = temperature
+
+        self.criterion = NASLoss(criterion_type = self.criterion_type, temperature = self.temperature)
+
+    def set_optimizer(self, model):
+        if self.optimizer_type == "Adam":
+            optimizer = torch.optim.Adam(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
+
+        return optimizer
+
+    def train(self):
+
+        # TODO: Don't hardcode initial model configuration
+        model = BaseModel(self.model_name, self.model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
+                        dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
+        model.to(self.device)
+
+        for epoch in range(self.num_epochs):
+            
+            optimizer = self.set_optimizer(model)
+            total_loss = 0
+
+            print(f"Training Model\n")
+
+            with tqdm(self.train_dataloader, unit = "batch", position = 0, leave = True) as tepoch:
+                for i, (images, labels) in enumerate(tepoch):
+                    tepoch.set_description(f"Epoch {epoch + 1}")
+                    
+                    outputs = model(images.to(self.device))
+                    loss = self.criterion(outputs.to(self.device), labels.to(self.device))
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                    total_loss += loss.item()
+                    tepoch.set_postfix(loss = total_loss / (i+1))
+
+                    
+            train_accuracy = self.evaluate(model, dataloader_type = "train")
+            validation_accuracy = self.evaluate(model, dataloader_type = "val")
+            test_accuracy = self.evaluate(model, dataloader_type = "test")
+
+            print(f"\nModel {self.model_config}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
+
+    def evaluate(self, model, dataloader_type = "train"):
+
+        if dataloader_type == "train":
+            dataloader = self.train_dataloader
+        elif dataloader_type == "val":
+            dataloader = self.validation_dataloader
+        elif dataloader_type == "test":
+            dataloader = self.test_dataloader
+
+        total_loss = 0
+        total = 0
+        correct = 0
+        model.to(self.device)
+
+        with tqdm(dataloader, unit = "batch", position = 0, leave = True) as tepoch:
+            for i, (images, labels) in enumerate(tepoch):
+                tepoch.set_description(f"Eval on {dataloader_type}")
+
+                outputs = model(images.to(self.device))
+                loss = self.criterion(outputs.to(self.device), labels.to(self.device))
+                total_loss += loss.item()
+                
+                tepoch.set_postfix(loss = total_loss / (i+1))
+
+                _, predicted = torch.max(outputs, dim = 1)
+                total += labels.size(0)
+
+                correct += (predicted == labels.to(self.device)).sum().item()
+                tepoch.set_postfix(acc = correct / total)
+
+        accuracy = correct / total
+        return accuracy
