@@ -17,13 +17,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--architecture_search", default = False, type = bool)
     parser.add_argument("--batch_norm", default = True, type = bool)
-    parser.add_argument("--batch_sampling_size", default = 20, type = int)
+    parser.add_argument("--batch_sampling_size", default = 50, type = int)
     parser.add_argument("--batch_size", default = 64, type = int)
     parser.add_argument("--batch_update", default = False, type = bool)
     parser.add_argument("--criterion_type", default = "cross-entropy", type = str)
     parser.add_argument("--data_path", default = "./datasets/cifar100/", type = str)
+    parser.add_argument("--dir_name", default = "vgg19", type = str)
+    parser.add_argument("--discount_factor", default = 0.9, type = float)
     parser.add_argument("--download_data", default = False, type = bool)
     parser.add_argument("--dropout", default = 0.5, type = float)
+    parser.add_argument("--exponential_moving_average", default = False, type = bool)
     parser.add_argument("--eval_all", default = False, type = bool)
     parser.add_argument("--init_weights", default = True, type = bool)
     parser.add_argument("--learning_rate", default = 1e-4, type = float)
@@ -79,7 +82,9 @@ if __name__ == "__main__":
                     batch_norm = args.batch_norm, weights = None, progress = args.progress, num_epochs = args.num_epochs, 
                     learning_rate = args.learning_rate, weight_decay = args.weight_decay, device = device, 
                     optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature,
-                    prob_dist = args.prob_dist, eval_all = args.eval_all, batch_update = args.batch_update)
+                    prob_dist = args.prob_dist, eval_all = args.eval_all, batch_update = args.batch_update, 
+                    batch_sampling_size = args.batch_sampling_size, visualisation_dir = args.visualisation_dir, seed = args.seed,
+                    exponential_moving_average = args.exponential_moving_average, discount_factor = args.discount_factor)
         trainer.train()
 
         best_pooling_configurations = trainer.get_best_configuration()
@@ -98,5 +103,6 @@ if __name__ == "__main__":
                     num_classes = args.num_classes, init_weights = args.init_weights, dropout = args.dropout, 
                     batch_norm = args.batch_norm, weights = None, progress = args.progress, num_epochs = args.num_epochs, 
                     learning_rate = args.learning_rate, weight_decay = args.weight_decay, device = device, 
-                    optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature)
+                    optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature,
+                    visualisation_dir = args.visualisation_dir, dir_name = args.dir_name)
         trainer.train()

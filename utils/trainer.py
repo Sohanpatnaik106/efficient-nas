@@ -16,8 +16,9 @@ class NASTrainer():
                 num_classes = 100, init_weights = True, dropout = 0.5, batch_norm = True, 
                 weights = None, progress = True, num_epochs = 180, learning_rate = 1e-4, weight_decay = 1e-4, 
                 device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7,
-                prob_dist = "maximum", eval_all = False, batch_update = True, 
-                visualisation_dir = "./visualisation/epoch_sample", seed = 0):
+                prob_dist = "maximum", eval_all = False, batch_update = True, batch_sampling_size = 30,
+                visualisation_dir = "./visualisation/epoch_sample", seed = 0, exponential_moving_average = False, 
+                discount_factor = 0.9):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -41,7 +42,10 @@ class NASTrainer():
         self.prob_dist = prob_dist
         self.eval_all = eval_all
         self.batch_update = batch_update
+        self.batch_sampling_size = batch_sampling_size
         self.seed = seed
+        self.exponential_moving_average = exponential_moving_average
+        self.discount_factor = discount_factor
 
         self.visualisation_dir = visualisation_dir
         if not os.path.exists(self.visualisation_dir):
@@ -101,7 +105,8 @@ class NASTrainer():
         # TODO: How to update the probabilities using the accuracy
         # NOTE: As of now, calculating accuracy of all the configurations
         # and updating the likelihood
-
+        
+        # TODO: Update the eval all part 
         if eval_all:
             accuracies = []
             for idx, model_config in self.search_space.items():
@@ -117,7 +122,12 @@ class NASTrainer():
             self.sample_probabilities = np.exp(self.sample_probabilities * accuracies)
             self.sample_probabilities = self.sample_probabilities / np.sum(self.sample_probabilities)
         else:
-            self.sample_probabilities[sample_index], loss = self.evaluate(model, model_idx = sample_index)
+            accuracy, loss = self.evaluate(model, model_idx = sample_index)
+            if self.exponential_moving_average:
+                self.sample_probabilities[sample_index] = self.discount_factor * self.sample_probabilities[sample_index] \
+                                                                        + (1 - self.discount_factor) * accuracy
+            else:
+                self.sample_probabilities[sample_index] = accuracy
             # NOTE: Do not normalise now, normalise it into a distribution after some number of epochs of training.
             # self.sample_probabilities = self.sample_probabilities / np.sum(self.sample_probabilities)
 
@@ -160,7 +170,7 @@ class NASTrainer():
                     total_loss += loss.item()
                     tepoch.set_postfix(loss = total_loss / (i+1))
 
-                    if self.batch_update:
+                    if self.batch_update and (i+1) % self.batch_sampling_size == 0:
                         self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
                         print("\n")
                         train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
