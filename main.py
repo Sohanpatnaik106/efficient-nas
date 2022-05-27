@@ -1,9 +1,11 @@
 import os
+import sys
 import torch
 import argparse
 import torchvision
 import numpy as np
 from src.model import cfgs
+from src.utils import Logger
 from utils.env import set_seed
 from torchvision import transforms
 from data.dataloader import CIFAR100
@@ -30,6 +32,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval_all", default = False, type = bool)
     parser.add_argument("--init_weights", default = True, type = bool)
     parser.add_argument("--learning_rate", default = 1e-4, type = float)
+    parser.add_argument("--log_dir", default = "./outputs/epoch_sample", type = str)
     parser.add_argument("--model_architecture", nargs = "+")
     parser.add_argument("--model_config", default = "E", type = str, choices = ["D", "E"])
     parser.add_argument("--model_name", default = "vgg19", type = str, choices = ["vgg16", "vgg19"])
@@ -46,10 +49,18 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", default = 0.7, type = float)
     parser.add_argument("--visualisation_dir", default = "./visualisation/epoch_sample", type = str)
     parser.add_argument("--weight_decay", default = 1e-4, type = float)
-
+    
     args = parser.parse_args()
-    print("\nArguments List:")
-    print(args, end = "\n\n")
+
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
+    log_out = os.path.join(args.log_dir, 'output.log')
+    sys.stdout = Logger(log_out)
+    
+    print("\nArguments List:\n")
+    for key, val in vars(args).items():
+        print(f"{key}: {val}")
+    print()
 
     set_seed(args.seed)
     device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
