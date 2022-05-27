@@ -33,6 +33,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_classes", default = 100, type = int)
     parser.add_argument("--num_configs", default = 100, type = int)
     parser.add_argument("--num_epochs", default = 180, type = int)
+    parser.add_argument("--num_repeats", default = 3, type = int)
     parser.add_argument("--num_val_examples", default = 1000, type = int)
     parser.add_argument("--num_workers", default = 2, type = int)
     parser.add_argument("--optimizer_type", default = "Adam", type = str)
@@ -40,11 +41,12 @@ if __name__ == "__main__":
     parser.add_argument("--prob_dist", default = "maximum", type = str)
     parser.add_argument("--seed", default = 0, type = int)
     parser.add_argument("--temperature", default = 0.7, type = float)
+    parser.add_argument("--visualisation_dir", default = "./visualisation/epoch_sample", type = str)
     parser.add_argument("--weight_decay", default = 1e-4, type = float)
 
     args = parser.parse_args()
     print("\nArguments List:")
-    print(args, end = "\n")
+    print(args, end = "\n\n")
 
     set_seed(args.seed)
     device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')

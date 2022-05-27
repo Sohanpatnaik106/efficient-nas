@@ -5,7 +5,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from src.loss import NASLoss
 from src.model import BaseModel, _vgg
-from .visualise import plot_sampling_prob_dist
+from .visualise import plot_sampling_prob_dist, plot_loss, plot_accuracy
 
 # TODO: Implement the batch wise updation of sampling likelihoods. 
 # Change the print and progress bar structure.
@@ -110,14 +110,14 @@ class NASTrainer():
                                     dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
                 new_model = self.copy_parameters(model, new_model)
 
-                accuracy = self.evaluate(new_model, model_idx = idx)
+                accuracy, loss = self.evaluate(new_model, model_idx = idx)
                 accuracies.append(accuracy)
 
             accuracies = np.array(accuracies)
             self.sample_probabilities = np.exp(self.sample_probabilities * accuracies)
             self.sample_probabilities = self.sample_probabilities / np.sum(self.sample_probabilities)
         else:
-            self.sample_probabilities[sample_index] = self.evaluate(model, model_idx = sample_index)
+            self.sample_probabilities[sample_index], loss = self.evaluate(model, model_idx = sample_index)
             # NOTE: Do not normalise now, normalise it into a distribution after some number of epochs of training.
             # self.sample_probabilities = self.sample_probabilities / np.sum(self.sample_probabilities)
 
@@ -128,6 +128,9 @@ class NASTrainer():
         model = BaseModel(self.model_name, initial_model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
                         dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
         model.to(self.device)
+
+        training_accuracies, validation_accuracies, test_accuracies = [], [], []
+        training_losses, validation_losses, test_losses = [], [], []
 
         for epoch in range(self.num_epochs):
             
@@ -160,9 +163,9 @@ class NASTrainer():
                     if self.batch_update:
                         self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
                         print("\n")
-                        train_accuracy = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
-                        validation_accuracy = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
-                        test_accuracy = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
+                        train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
+                        validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
+                        test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
 
                         print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
 
@@ -175,14 +178,24 @@ class NASTrainer():
                 print("\n")
                 self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
                 print("\n")
-                train_accuracy = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
-                validation_accuracy = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
-                test_accuracy = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
+                train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
+                validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
+                test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
 
                 print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
-            
+
+                training_accuracies.append(train_accuracy)
+                validation_accuracies.append(validation_accuracy)
+                test_accuracies.append(test_accuracy)
+                training_losses.append(train_loss)
+                validation_losses.append(validation_loss)
+                test_losses.append(test_loss)
+
             # Plot the probability distribution after every epoch
             plot_sampling_prob_dist(self.sample_probabilities, epoch+1, self.num_configs, self.visualisation_dir)
+        
+        plot_loss(training_losses, validation_losses, test_losses, self.visualisation_dir, num_epochs = self.num_epochs)
+        plot_accuracy(training_accuracies, validation_accuracies, test_accuracies, self.visualisation_dir, num_epochs = self.num_epochs)
 
     def evaluate(self, model, dataloader_type = "train", model_idx = "0"):
 
@@ -215,7 +228,8 @@ class NASTrainer():
                 tepoch.set_postfix(acc = correct / total)
 
         accuracy = correct / total
-        return accuracy
+        loss = total_loss / (i+1)
+        return accuracy, loss
 
     def get_best_configuration(self):
 
@@ -228,12 +242,16 @@ class NASTrainer():
         
         return best_configs
 
+
+
+
 class Trainer():
 
     def __init__(self, train_dataloader, validation_dataloader, test_dataloader, model_config, model_name, 
                 num_classes = 100, init_weights = True, dropout = 0.5, batch_norm = True, 
                 weights = None, progress = True, num_epochs = 180, learning_rate = 1e-4, weight_decay = 1e-4, 
-                device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7):
+                device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7,
+                visualisation_dir = "./visualisation/base_model", dir_name = "vgg19"):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -255,6 +273,14 @@ class Trainer():
         self.optimizer_type = optimizer_type
         self.criterion_type = criterion_type
         self.temperature = temperature
+        
+        self.dir_name = dir_name
+        self.visualisation_dir = visualisation_dir
+        if not os.path.exists(self.visualisation_dir):
+            os.makedirs(self.visualisation_dir)
+        self.visualisation_dir = os.path.join(self.visualisation_dir, self.dir_name)
+        if not os.path.exists(self.visualisation_dir):
+            os.makedirs(self.visualisation_dir)
 
         self.criterion = NASLoss(criterion_type = self.criterion_type, temperature = self.temperature)
 
@@ -270,6 +296,9 @@ class Trainer():
         model = BaseModel(self.model_name, self.model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
                         dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
         model.to(self.device)
+
+        training_accuracies, validation_accuracies, test_accuracies = [], [], []
+        training_losses, validation_losses, test_losses = [], [], []
 
         for epoch in range(self.num_epochs):
             
@@ -290,13 +319,22 @@ class Trainer():
 
                     total_loss += loss.item()
                     tepoch.set_postfix(loss = total_loss / (i+1))
-
                     
-            train_accuracy = self.evaluate(model, dataloader_type = "train")
-            validation_accuracy = self.evaluate(model, dataloader_type = "val")
-            test_accuracy = self.evaluate(model, dataloader_type = "test")
-
+            train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train")
+            validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val")
+            test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test")
+            
             print(f"\nModel {self.model_config}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
+
+            training_accuracies.append(train_accuracy)
+            validation_accuracies.append(validation_accuracy)
+            test_accuracies.append(test_accuracy)
+            training_losses.append(train_loss)
+            validation_losses.append(validation_loss)
+            test_losses.append(test_loss)
+
+        plot_loss(training_losses, validation_losses, test_losses, self.visualisation_dir, num_epochs = self.num_epochs)
+        plot_accuracy(training_accuracies, validation_accuracies, test_accuracies, self.visualisation_dir, num_epochs = self.num_epochs)        
 
     def evaluate(self, model, dataloader_type = "train"):
 
@@ -329,4 +367,5 @@ class Trainer():
                 tepoch.set_postfix(acc = correct / total)
 
         accuracy = correct / total
-        return accuracy
+        loss = total_loss / (i+1)
+        return accuracy, loss
