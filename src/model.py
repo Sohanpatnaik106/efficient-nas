@@ -33,7 +33,7 @@ __all__ = [
 class BaseModel(nn.Module):
 
     def __init__(self, model_name, model_config, num_classes = 100, init_weights = True, dropout = 0.5, 
-                batch_norm = True, weights = None, progress = True):
+                batch_norm = True, weights = None, progress = True, track_running_stats = False):
         super(BaseModel, self).__init__()
 
         self.model_name = model_name
@@ -44,10 +44,11 @@ class BaseModel(nn.Module):
         self.batch_norm = batch_norm
         self.weights = weights
         self.progress = progress
+        self.track_running_stats = track_running_stats
 
         if "vgg" in self.model_name:
             self.model = _vgg(self.model_config, self.batch_norm, self.weights, self.progress, num_classes = self.num_classes, 
-                            init_weights = self.init_weights, dropout = self.dropout)
+                            init_weights = self.init_weights, dropout = self.dropout, track_running_stats = self.track_running_stats)
 
     def forward(self, images):
         return self.model(images)
@@ -97,7 +98,7 @@ class VGG(nn.Module):
         
         return x
 
-def make_layers(cfg: str, batch_norm: bool = False) -> nn.Sequential:
+def make_layers(cfg: str, batch_norm: bool = False, track_running_stats: bool = False) -> nn.Sequential:
     
     layers: List[nn.Module] = []
     in_channels = 3
@@ -105,21 +106,22 @@ def make_layers(cfg: str, batch_norm: bool = False) -> nn.Sequential:
     for v in cfg:
     
         if v == "M":
-            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+            layers += [nn.MaxPool2d(kernel_size = 2, stride = 2)]
     
         else:
             v = cast(int, v)
-            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            conv2d = nn.Conv2d(in_channels, v, kernel_size = 3, padding = 1)
             if batch_norm:
-                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+                layers += [conv2d, nn.BatchNorm2d(v, track_running_stats = track_running_stats), nn.ReLU(inplace = True)]
             else:
-                layers += [conv2d, nn.ReLU(inplace=True)]
+                layers += [conv2d, nn.ReLU(inplace = True)]
             in_channels = v
     
     return nn.Sequential(*layers)
 
 def _vgg(cfg: str, batch_norm: bool, weights, progress: bool, 
-        num_classes: int = 1000, init_weights: bool = True, dropout: float = 0.5) -> VGG:
+        num_classes: int = 1000, init_weights: bool = True, dropout: float = 0.5,
+        track_running_stats: bool = False) -> VGG:
     
     kwargs = {}
     if weights is not None:
@@ -128,7 +130,7 @@ def _vgg(cfg: str, batch_norm: bool, weights, progress: bool,
         if weights.meta["categories"] is not None:
             _ovewrite_named_param(kwargs, "num_classes", len(weights.meta["categories"]))
     
-    model = VGG(make_layers(cfg, batch_norm=batch_norm), 
+    model = VGG(make_layers(cfg, batch_norm=batch_norm, track_running_stats = track_running_stats), 
                 num_classes = num_classes, init_weights = init_weights, dropout = dropout)
     
     if weights is not None:

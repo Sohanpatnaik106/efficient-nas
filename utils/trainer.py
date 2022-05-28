@@ -18,7 +18,7 @@ class NASTrainer():
                 device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7,
                 prob_dist = "maximum", eval_all = False, batch_update = True, batch_sampling_size = 30,
                 visualisation_dir = "./visualisation/epoch_sample", seed = 0, exponential_moving_average = False, 
-                discount_factor = 0.9, normalise_prob_dist = True):
+                discount_factor = 0.9, normalise_prob_dist = True, track_running_stats = False):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -47,6 +47,7 @@ class NASTrainer():
         self.exponential_moving_average = exponential_moving_average
         self.discount_factor = discount_factor
         self.normalise_prob_dist = normalise_prob_dist
+        self.track_running_stats = track_running_stats
 
         self.visualisation_dir = visualisation_dir
         if not os.path.exists(self.visualisation_dir):
@@ -89,7 +90,8 @@ class NASTrainer():
         # new_model.load_state_dict(model.state_dict)
 
         new_model = BaseModel(self.model_name, model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
-                        dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
+                        dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress,
+                        track_running_stats = self.track_running_stats)
         new_model = self.copy_parameters(model, new_model)
     
         return new_model
@@ -142,7 +144,8 @@ class NASTrainer():
         # TODO: Don't hardcode initial model configuration
         initial_model_config = self.search_space["0"]
         model = BaseModel(self.model_name, initial_model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
-                        dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
+                        dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress,
+                        track_running_stats = self.track_running_stats)
         model.to(self.device)
 
         training_accuracies, validation_accuracies, test_accuracies = [], [], []

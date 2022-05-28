@@ -48,6 +48,7 @@ if __name__ == "__main__":
     parser.add_argument("--prob_dist", default = "maximum", type = str)
     parser.add_argument("--seed", default = 0, type = int)
     parser.add_argument("--temperature", default = 0.7, type = float)
+    parser.add_argument("--track_running_stats", default = False, type = bool)
     parser.add_argument("--visualisation_dir", default = "./visualisation/epoch_sample", type = str)
     parser.add_argument("--weight_decay", default = 1e-4, type = float)
     
@@ -97,7 +98,7 @@ if __name__ == "__main__":
                     prob_dist = args.prob_dist, eval_all = args.eval_all, batch_update = args.batch_update, 
                     batch_sampling_size = args.batch_sampling_size, visualisation_dir = args.visualisation_dir, seed = args.seed,
                     exponential_moving_average = args.exponential_moving_average, discount_factor = args.discount_factor,
-                    normalise_prob_dist = args.normalise_prob_dist)
+                    normalise_prob_dist = args.normalise_prob_dist, track_running_stats = args.track_running_stats)
         trainer.train()
 
         best_pooling_configurations = trainer.get_best_configuration()
