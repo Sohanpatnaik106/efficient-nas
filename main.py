@@ -31,6 +31,7 @@ if __name__ == "__main__":
     parser.add_argument("--dynamic_temperature", default = True, type = bool)
     parser.add_argument("--exponential_moving_average", default = False, type = bool)
     parser.add_argument("--eval_all", default = False, type = bool)
+    parser.add_argument("--gpuid", default = 0, type = int)
     parser.add_argument("--init_weights", default = True, type = bool)
     parser.add_argument("--learning_rate", default = 1e-4, type = float)
     parser.add_argument("--log_dir", default = "./outputs/epoch_sample", type = str)
@@ -67,7 +68,7 @@ if __name__ == "__main__":
     print()
 
     set_seed(args.seed)
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    device = torch.device(f"cuda:{args.gpuid}" if torch.cuda.is_available() else 'cpu')
 
     transform = transforms.Compose([
                         transforms.ToTensor(),
@@ -88,13 +89,13 @@ if __name__ == "__main__":
 
     train_accuracies, validation_accuracies, test_accuracies = [], [], []
 
-    for i in range(args.num_repeats):
+    for r in range(args.num_repeats):
 
         print("************************************")
-        print(f"* STARTING TRIAL {i+1}")
+        print(f"* STARTING TRIAL {r+1}")
         print("************************************")
 
-        args.seed += i
+        args.seed += r
 
         if args.architecture_search:
 
