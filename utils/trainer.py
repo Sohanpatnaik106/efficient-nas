@@ -18,7 +18,8 @@ class NASTrainer():
                 device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7,
                 prob_dist = "maximum", eval_all = False, batch_update = True, batch_sampling_size = 30,
                 visualisation_dir = "./visualisation/epoch_sample", seed = 0, exponential_moving_average = False, 
-                discount_factor = 0.9, normalise_prob_dist = True, track_running_stats = False):
+                discount_factor = 0.9, normalise_prob_dist = True, track_running_stats = False, temperature_epoch_scaling = 50,
+                dynamic_temperature = True):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -48,6 +49,8 @@ class NASTrainer():
         self.discount_factor = discount_factor
         self.normalise_prob_dist = normalise_prob_dist
         self.track_running_stats = track_running_stats
+        self.temperature_epoch_scaling = temperature_epoch_scaling
+        self.dynamic_temperature = dynamic_temperature
 
         self.visualisation_dir = visualisation_dir
         if not os.path.exists(self.visualisation_dir):
@@ -71,6 +74,9 @@ class NASTrainer():
             optimizer = torch.optim.Adam(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
 
         return optimizer
+
+    def update_temperature(self, epoch_number):
+        self.temperature = self.temperature * np.exp(- epoch_number / self.temperature_epoch_scaling)
     
     def sample_architecture(self):
 
@@ -164,7 +170,7 @@ class NASTrainer():
             optimizer = self.set_optimizer(model)
             total_loss = 0
 
-            print(f"Training Model {sample_idx}")
+            print(f"\nTraining Model {sample_idx}")
 
             with tqdm(self.train_dataloader, unit = "batch", position = 0, leave = True) as tepoch:
                 for i, (images, labels) in enumerate(tepoch):
@@ -212,10 +218,15 @@ class NASTrainer():
 
             # Plot the probability distribution after every epoch
             plot_sampling_prob_dist(self.sample_probabilities, epoch+1, self.num_configs, self.visualisation_dir)
-        
+            if self.dynamic_temperature:
+                self.update_temperature(epoch)
+
         plot_loss(training_losses, validation_losses, test_losses, self.visualisation_dir, num_epochs = self.num_epochs)
         plot_accuracy(training_accuracies, validation_accuracies, test_accuracies, self.visualisation_dir, num_epochs = self.num_epochs)
 
+        return training_accuracies[-1], validation_accuracies[-1], test_accuracies[-1]
+    
+    
     def evaluate(self, model, dataloader_type = "train", model_idx = "0"):
 
         if dataloader_type == "train":
@@ -260,9 +271,6 @@ class NASTrainer():
             best_configs[str(idx)] = self.search_space[str(idx)]
         
         return best_configs
-
-
-
 
 class Trainer():
 
@@ -324,7 +332,7 @@ class Trainer():
             optimizer = self.set_optimizer(model)
             total_loss = 0
 
-            print(f"Training Model\n")
+            print(f"\nTraining Model\n")
 
             with tqdm(self.train_dataloader, unit = "batch", position = 0, leave = True) as tepoch:
                 for i, (images, labels) in enumerate(tepoch):
@@ -354,6 +362,8 @@ class Trainer():
 
         plot_loss(training_losses, validation_losses, test_losses, self.visualisation_dir, num_epochs = self.num_epochs)
         plot_accuracy(training_accuracies, validation_accuracies, test_accuracies, self.visualisation_dir, num_epochs = self.num_epochs)        
+
+        return training_accuracies[-1], validation_accuracies[-1], test_accuracies[-1]
 
     def evaluate(self, model, dataloader_type = "train"):
 

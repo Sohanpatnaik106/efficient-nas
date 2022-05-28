@@ -28,6 +28,7 @@ if __name__ == "__main__":
     parser.add_argument("--discount_factor", default = 0.9, type = float)
     parser.add_argument("--download_data", default = False, type = bool)
     parser.add_argument("--dropout", default = 0.5, type = float)
+    parser.add_argument("--dynamic_temperature", default = True, type = bool)
     parser.add_argument("--exponential_moving_average", default = False, type = bool)
     parser.add_argument("--eval_all", default = False, type = bool)
     parser.add_argument("--init_weights", default = True, type = bool)
@@ -47,7 +48,8 @@ if __name__ == "__main__":
     parser.add_argument("--progress", default = True, type = bool)
     parser.add_argument("--prob_dist", default = "maximum", type = str)
     parser.add_argument("--seed", default = 0, type = int)
-    parser.add_argument("--temperature", default = 0.7, type = float)
+    parser.add_argument("--temperature", default = 10, type = float)
+    parser.add_argument("--temperature_epoch_scaling", default = 50, type = float)
     parser.add_argument("--track_running_stats", default = False, type = bool)
     parser.add_argument("--visualisation_dir", default = "./visualisation/epoch_sample", type = str)
     parser.add_argument("--weight_decay", default = 1e-4, type = float)
@@ -84,39 +86,72 @@ if __name__ == "__main__":
     validation_dataloader = DataLoader(validation_data, batch_size = args.batch_size, shuffle = False, num_workers = args.num_workers)
     test_dataloader = DataLoader(test_data, batch_size = args.batch_size, shuffle = False, num_workers = args.num_workers)
 
-    if args.architecture_search:
+    train_accuracies, validation_accuracies, test_accuracies = [], [], []
 
-        model_config = cfgs[args.model_config]
-        pool_search_space = PoolSearchSpace("vgg19", model_config, num_configs = args.num_configs)
-        pool_search_space.create_search_space()
+    for i in range(args.num_repeats):
 
-        trainer = NASTrainer(train_dataloader, validation_dataloader, test_dataloader, pool_search_space.search_space, 
-                    args.model_name, num_classes = args.num_classes, init_weights = args.init_weights, dropout = args.dropout, 
-                    batch_norm = args.batch_norm, weights = None, progress = args.progress, num_epochs = args.num_epochs, 
-                    learning_rate = args.learning_rate, weight_decay = args.weight_decay, device = device, 
-                    optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature,
-                    prob_dist = args.prob_dist, eval_all = args.eval_all, batch_update = args.batch_update, 
-                    batch_sampling_size = args.batch_sampling_size, visualisation_dir = args.visualisation_dir, seed = args.seed,
-                    exponential_moving_average = args.exponential_moving_average, discount_factor = args.discount_factor,
-                    normalise_prob_dist = args.normalise_prob_dist, track_running_stats = args.track_running_stats)
-        trainer.train()
+        print("************************************")
+        print(f"* STARTING TRIAL {i+1}")
+        print("************************************")
 
-        best_pooling_configurations = trainer.get_best_configuration()
-        for idx, architecture in best_pooling_configurations.items():
-            print(f"{idx}: {architecture}")
-        
-        print("\n")
+        args.seed += i
 
-    else:
+        if args.architecture_search:
 
-        for i in range(len(args.model_architecture)):
-            if args.model_architecture[i].isdigit():
-                args.model_architecture[i] = int(args.model_architecture[i])
+            model_config = cfgs[args.model_config]
+            pool_search_space = PoolSearchSpace("vgg19", model_config, num_configs = args.num_configs)
+            pool_search_space.create_search_space()
 
-        trainer = Trainer(train_dataloader, validation_dataloader, test_dataloader, args.model_architecture, args.model_name,
-                    num_classes = args.num_classes, init_weights = args.init_weights, dropout = args.dropout, 
-                    batch_norm = args.batch_norm, weights = None, progress = args.progress, num_epochs = args.num_epochs, 
-                    learning_rate = args.learning_rate, weight_decay = args.weight_decay, device = device, 
-                    optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature,
-                    visualisation_dir = args.visualisation_dir, dir_name = args.dir_name)
-        trainer.train()
+            trainer = NASTrainer(train_dataloader, validation_dataloader, test_dataloader, pool_search_space.search_space, 
+                        args.model_name, num_classes = args.num_classes, init_weights = args.init_weights, dropout = args.dropout, 
+                        batch_norm = args.batch_norm, weights = None, progress = args.progress, num_epochs = args.num_epochs, 
+                        learning_rate = args.learning_rate, weight_decay = args.weight_decay, device = device, 
+                        optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature,
+                        prob_dist = args.prob_dist, eval_all = args.eval_all, batch_update = args.batch_update, 
+                        batch_sampling_size = args.batch_sampling_size, visualisation_dir = args.visualisation_dir, seed = args.seed,
+                        exponential_moving_average = args.exponential_moving_average, discount_factor = args.discount_factor,
+                        normalise_prob_dist = args.normalise_prob_dist, track_running_stats = args.track_running_stats,
+                        temperature_epoch_scaling = args.temperature_epoch_scaling, dynamic_temperature = args.dynamic_temperature)
+            train_accuracy, validation_accuracy, test_accuracy = trainer.train()
+            
+            train_accuracies.append(train_accuracy)
+            validation_accuracies.append(validation_accuracy)
+            test_accuracies.append(test_accuracy)
+
+            best_pooling_configurations = trainer.get_best_configuration()
+            print("\nBest Pooling Configuration:\n")
+            for idx, architecture in best_pooling_configurations.items():
+                print(f"{idx}: {architecture}")
+            
+            print("\n")
+
+        else:
+
+            for i in range(len(args.model_architecture)):
+                if args.model_architecture[i].isdigit():
+                    args.model_architecture[i] = int(args.model_architecture[i])
+
+            trainer = Trainer(train_dataloader, validation_dataloader, test_dataloader, args.model_architecture, args.model_name,
+                        num_classes = args.num_classes, init_weights = args.init_weights, dropout = args.dropout, 
+                        batch_norm = args.batch_norm, weights = None, progress = args.progress, num_epochs = args.num_epochs, 
+                        learning_rate = args.learning_rate, weight_decay = args.weight_decay, device = device, 
+                        optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature,
+                        visualisation_dir = args.visualisation_dir, dir_name = args.dir_name)
+            train_accuracy, validation_accuracy, test_accuracy = trainer.train()
+
+            train_accuracies.append(train_accuracy)
+            validation_accuracies.append(validation_accuracy)
+            test_accuracies.append(test_accuracy)
+
+    train_accuracies = np.array(train_accuracies)
+    validation_accuracies = np.array(validation_accuracies)
+    test_accuracies = np.array(test_accuracies)
+
+    print(f"Summary of {args.num_repeats} experiment repeats:")
+    print(f"MEAN\tTrain Accuracy: {np.mean(train_accuracies): .4f}, Validation Accuracy: {np.mean(validation_accuracies): .4f}, Test Accuracy: {np.mean(test_accuracies): .4f}")
+    print(f"STDEV\tTrain Accuracy: {np.std(train_accuracies): .4f}, Validation Accuracy: {np.std(validation_accuracies): .4f}, Test Accuracy: {np.std(test_accuracies): .4f}")
+
+    print("************************************")
+    print(f"* END OF EXECUTION")
+    print("************************************")
+    print("\n")
