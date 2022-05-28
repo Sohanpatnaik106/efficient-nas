@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_architecture", nargs = "+")
     parser.add_argument("--model_config", default = "E", type = str, choices = ["D", "E"])
     parser.add_argument("--model_name", default = "vgg19", type = str, choices = ["vgg16", "vgg19"])
+    parser.add_argument("--normalise_prob_dist", default = True, type = bool)
     parser.add_argument("--num_classes", default = 100, type = int)
     parser.add_argument("--num_configs", default = 100, type = int)
     parser.add_argument("--num_epochs", default = 180, type = int)
@@ -95,7 +96,8 @@ if __name__ == "__main__":
                     optimizer_type = args.optimizer_type, criterion_type = args.criterion_type, temperature = args.temperature,
                     prob_dist = args.prob_dist, eval_all = args.eval_all, batch_update = args.batch_update, 
                     batch_sampling_size = args.batch_sampling_size, visualisation_dir = args.visualisation_dir, seed = args.seed,
-                    exponential_moving_average = args.exponential_moving_average, discount_factor = args.discount_factor)
+                    exponential_moving_average = args.exponential_moving_average, discount_factor = args.discount_factor,
+                    normalise_prob_dist = args.normalise_prob_dist)
         trainer.train()
 
         best_pooling_configurations = trainer.get_best_configuration()

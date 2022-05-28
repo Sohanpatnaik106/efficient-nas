@@ -18,7 +18,7 @@ class NASTrainer():
                 device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7,
                 prob_dist = "maximum", eval_all = False, batch_update = True, batch_sampling_size = 30,
                 visualisation_dir = "./visualisation/epoch_sample", seed = 0, exponential_moving_average = False, 
-                discount_factor = 0.9):
+                discount_factor = 0.9, normalise_prob_dist = True):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -46,6 +46,7 @@ class NASTrainer():
         self.seed = seed
         self.exponential_moving_average = exponential_moving_average
         self.discount_factor = discount_factor
+        self.normalise_prob_dist = normalise_prob_dist
 
         self.visualisation_dir = visualisation_dir
         if not os.path.exists(self.visualisation_dir):
@@ -126,10 +127,15 @@ class NASTrainer():
             if self.exponential_moving_average:
                 self.sample_probabilities[sample_index] = self.discount_factor * self.sample_probabilities[sample_index] \
                                                                         + (1 - self.discount_factor) * accuracy
-            else:
-                self.sample_probabilities[sample_index] = accuracy
+
             # NOTE: Do not normalise now, normalise it into a distribution after some number of epochs of training.
-            # self.sample_probabilities = self.sample_probabilities / np.sum(self.sample_probabilities)
+            if self.normalise_prob_dist:
+                acc = np.ones(self.sample_probabilities.shape[0])
+                acc[sample_index] = accuracy
+                self.sample_probabilities = np.exp((self.sample_probabilities * acc) / self.temperature) \
+                                                        / np.sum(np.exp((self.sample_probabilities * acc) / self.temperature))
+            elif not self.exponential_moving_average:
+                self.sample_probabilities[sample_index] = accuracy
 
     def train(self):
         
