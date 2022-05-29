@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--architecture_search", default = False, type = bool)
-    parser.add_argument("--batch_norm", default = True, type = bool)
+    parser.add_argument("--batch_norm", default = False, type = bool)
     parser.add_argument("--batch_sampling_size", default = 50, type = int)
     parser.add_argument("--batch_size", default = 64, type = int)
     parser.add_argument("--batch_update", default = False, type = bool)
@@ -28,17 +28,17 @@ if __name__ == "__main__":
     parser.add_argument("--discount_factor", default = 0.9, type = float)
     parser.add_argument("--download_data", default = False, type = bool)
     parser.add_argument("--dropout", default = 0.5, type = float)
-    parser.add_argument("--dynamic_temperature", default = True, type = bool)
+    parser.add_argument("--dynamic_temperature", default = False, type = bool)
     parser.add_argument("--exponential_moving_average", default = False, type = bool)
     parser.add_argument("--eval_all", default = False, type = bool)
     parser.add_argument("--gpuid", default = 0, type = int)
-    parser.add_argument("--init_weights", default = True, type = bool)
+    parser.add_argument("--init_weights", default = False, type = bool)
     parser.add_argument("--learning_rate", default = 1e-4, type = float)
     parser.add_argument("--log_dir", default = "./outputs/epoch_sample", type = str)
     parser.add_argument("--model_architecture", nargs = "+")
     parser.add_argument("--model_config", default = "E", type = str, choices = ["D", "E"])
     parser.add_argument("--model_name", default = "vgg19", type = str, choices = ["vgg16", "vgg19"])
-    parser.add_argument("--normalise_prob_dist", default = True, type = bool)
+    parser.add_argument("--normalise_prob_dist", default = False, type = bool)
     parser.add_argument("--num_classes", default = 100, type = int)
     parser.add_argument("--num_configs", default = 100, type = int)
     parser.add_argument("--num_epochs", default = 180, type = int)
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_val_examples", default = 1000, type = int)
     parser.add_argument("--num_workers", default = 2, type = int)
     parser.add_argument("--optimizer_type", default = "Adam", type = str)
-    parser.add_argument("--progress", default = True, type = bool)
+    parser.add_argument("--progress", default = False, type = bool)
     parser.add_argument("--prob_dist", default = "maximum", type = str)
     parser.add_argument("--seed", default = 0, type = int)
     parser.add_argument("--temperature", default = 10, type = float)
@@ -59,6 +59,8 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
+    if not os.path.exists(args.visualisation_dir):
+        os.makedirs(args.visualisation_dir)
     log_out = os.path.join(args.log_dir, 'output.log')
     sys.stdout = Logger(log_out)
     
