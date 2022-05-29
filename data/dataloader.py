@@ -138,7 +138,6 @@ class CIFAR10(VisionDataset):
         split = "Train" if self.train is True else "Test"
         return f"Split: {split}"
 
-
 class CIFAR100(CIFAR10):
     """`CIFAR100 <https://www.cs.toronto.edu/~kriz/cifar.html>`_ Dataset.
     This is a subclass of the `CIFAR10` Dataset.
