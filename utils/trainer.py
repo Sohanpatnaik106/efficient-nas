@@ -85,7 +85,7 @@ class NASTrainer():
         if all_idx[0].shape[0] == 1:
             return sample_idx, self.search_space[str(sample_idx)]
         else:
-            random_idx = np.random.randint(0, all_idx[0].shape[0] - 1)
+            random_idx = np.random.randint(0, all_idx[0].shape[0])
             sample_idx = all_idx[0][random_idx]
             return sample_idx, self.search_space[str(sample_idx)]
 
