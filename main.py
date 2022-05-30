@@ -59,12 +59,9 @@ if __name__ == "__main__":
 
     if not args.architecture_search:
         args.log_dir = os.path.join(args.log_dir, args.dir_name)
-        args.visualisation_dir = os.path.join(args.visualisation_dir, args.dir_name)
 
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
-    if not os.path.exists(args.visualisation_dir):
-        os.makedirs(args.visualisation_dir)
 
     log_out = os.path.join(args.log_dir, 'output.log')
     sys.stdout = Logger(log_out)
@@ -74,7 +71,6 @@ if __name__ == "__main__":
         print(f"{key}: {val}")
     print()
 
-    set_seed(args.seed)
     device = torch.device(f"cuda:{args.gpuid}" if torch.cuda.is_available() else 'cpu')
 
     transform = transforms.Compose([
@@ -103,6 +99,7 @@ if __name__ == "__main__":
         print("************************************")
 
         args.seed += r
+        set_seed(args.seed)
 
         if args.architecture_search:
 
