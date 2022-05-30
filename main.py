@@ -56,6 +56,7 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", default = 1e-4, type = float)
     
     args = parser.parse_args()
+    set_seed(args.seed)
 
     if not args.architecture_search:
         args.log_dir = os.path.join(args.log_dir, args.dir_name)
