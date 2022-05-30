@@ -151,6 +151,9 @@ if __name__ == "__main__":
             validation_accuracies.append(validation_accuracy)
             test_accuracies.append(test_accuracy)
 
+            for i in range(len(args.model_architecture)):
+                args.model_architecture[i] = str(args.model_architecture[i])
+
     train_accuracies = np.array(train_accuracies)
     validation_accuracies = np.array(validation_accuracies)
     test_accuracies = np.array(test_accuracies)
