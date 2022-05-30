@@ -135,6 +135,8 @@ class NASTrainer():
             if self.exponential_moving_average:
                 self.sample_probabilities[sample_index] = self.discount_factor * self.sample_probabilities[sample_index] \
                                                                         + (1 - self.discount_factor) * accuracy
+            elif not self.exponential_moving_average:
+                self.sample_probabilities[sample_index] = accuracy
 
             # NOTE: Do not normalise now, normalise it into a distribution after some number of epochs of training.
             if self.normalise_prob_dist:
@@ -142,8 +144,6 @@ class NASTrainer():
                 acc[sample_index] = accuracy
                 self.sample_probabilities = np.exp((self.sample_probabilities * acc) / self.temperature) \
                                                         / np.sum(np.exp((self.sample_probabilities * acc) / self.temperature))
-            elif not self.exponential_moving_average:
-                self.sample_probabilities[sample_index] = accuracy
 
     def train(self):
         
