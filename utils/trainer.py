@@ -76,7 +76,10 @@ class NASTrainer():
         return optimizer
 
     def update_temperature(self, epoch_number):
-        self.temperature = self.temperature * np.exp(- epoch_number / self.temperature_epoch_scaling)
+        if self.temperature <= 0.7:
+            self.temperature = 0.7
+        else:
+            self.temperature = self.temperature * np.exp(- epoch_number / self.temperature_epoch_scaling)
     
     def sample_architecture(self):
 
