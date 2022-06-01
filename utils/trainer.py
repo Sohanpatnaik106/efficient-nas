@@ -144,7 +144,8 @@ class NASTrainer():
             # NOTE: Do not normalise now, normalise it into a distribution after some number of epochs of training.
             if self.normalise_prob_dist:
                 acc = np.ones(self.sample_probabilities.shape[0])
-                acc[sample_index] = accuracy
+                if self.exponential_moving_average:
+                    acc[sample_index] = accuracy
                 self.sample_probabilities = np.exp((self.sample_probabilities * acc) / self.temperature) \
                                                         / np.sum(np.exp((self.sample_probabilities * acc) / self.temperature))
 
