@@ -10,7 +10,7 @@ from utils.env import set_seed
 from torchvision import transforms
 from data.dataloader import CIFAR100
 from torch.utils.data import DataLoader
-from utils.search_space import PoolSearchSpace
+from utils.search_space import PoolSearchSpace, HierarchicalSearchSpace
 
 from utils.trainer import Trainer, NASTrainer
 
@@ -26,33 +26,38 @@ if __name__ == "__main__":
     parser.add_argument("--data_path", default = "./datasets/cifar100/", type = str)
     parser.add_argument("--dir_name", default = "vgg19", type = str)
     parser.add_argument("--discount_factor", default = 0.9, type = float)
+    parser.add_argument("--distance_type", default = "euclidean", type = str)
     parser.add_argument("--download_data", default = False, type = bool)
     parser.add_argument("--dropout", default = 0.5, type = float)
     parser.add_argument("--dynamic_temperature", default = False, type = bool)
     parser.add_argument("--exponential_moving_average", default = False, type = bool)
     parser.add_argument("--eval_all", default = False, type = bool)
     parser.add_argument("--gpuid", default = 0, type = int)
-    parser.add_argument("--init_weights", default = False, type = bool)
+    parser.add_argument("--hierarchical_search", default = True, type = bool)
+    parser.add_argument("--init_weights", default = True, type = bool)
     parser.add_argument("--learning_rate", default = 1e-4, type = float)
-    parser.add_argument("--log_dir", default = "./outputs/epoch_sample", type = str)
+    parser.add_argument("--linkage_type", default = "single", type = str)
+    parser.add_argument("--log_dir", default = "./outputs/hierarchical", type = str)
     parser.add_argument("--model_architecture", nargs = "+")
     parser.add_argument("--model_config", default = "E", type = str, choices = ["D", "E"])
     parser.add_argument("--model_name", default = "vgg19", type = str, choices = ["vgg16", "vgg19"])
     parser.add_argument("--normalise_prob_dist", default = False, type = bool)
     parser.add_argument("--num_classes", default = 100, type = int)
+    parser.add_argument("--num_clusters", default = 5, type = int)
     parser.add_argument("--num_configs", default = 100, type = int)
     parser.add_argument("--num_epochs", default = 180, type = int)
     parser.add_argument("--num_repeats", default = 3, type = int)
     parser.add_argument("--num_val_examples", default = 1000, type = int)
     parser.add_argument("--num_workers", default = 2, type = int)
     parser.add_argument("--optimizer_type", default = "Adam", type = str)
-    parser.add_argument("--progress", default = False, type = bool)
+    parser.add_argument("--progress", default = True, type = bool)
     parser.add_argument("--prob_dist", default = "maximum", type = str)
+    parser.add_argument("--sample_binomial", default = True, type = bool)
     parser.add_argument("--seed", default = 0, type = int)
     parser.add_argument("--temperature", default = 10, type = float)
     parser.add_argument("--temperature_epoch_scaling", default = 50, type = float)
     parser.add_argument("--track_running_stats", default = False, type = bool)
-    parser.add_argument("--visualisation_dir", default = "./visualisation/epoch_sample", type = str)
+    parser.add_argument("--visualisation_dir", default = "./visualisation/hierarchical", type = str)
     parser.add_argument("--weight_decay", default = 1e-4, type = float)
     
     args = parser.parse_args()
@@ -64,8 +69,8 @@ if __name__ == "__main__":
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
 
-    log_out = os.path.join(args.log_dir, 'output.log')
-    sys.stdout = Logger(log_out)
+    # log_out = os.path.join(args.log_dir, 'output.log')
+    # sys.stdout = Logger(log_out)
     
     print("\nArguments List:\n")
     for key, val in vars(args).items():
@@ -74,13 +79,25 @@ if __name__ == "__main__":
 
     device = torch.device(f"cuda:{args.gpuid}" if torch.cuda.is_available() else 'cpu')
 
-    transform = transforms.Compose([
-                        transforms.ToTensor(),
-                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-                        ])
+    # transform = transforms.Compose([
+    #                     transforms.ToTensor(),
+    #                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    #                     ])
 
-    train_data = CIFAR100(root = args.data_path, train = True, download = args.download_data, transform = transform)
-    test_data = CIFAR100(root = args.data_path, train = False, download = args.download_data, transform = transform)
+    stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    train_transform = transforms.Compose([
+                            transforms.RandomCrop(32, padding=4,padding_mode='reflect'), 
+                            transforms.RandomHorizontalFlip(), 
+                            transforms.ToTensor(), 
+                            transforms.Normalize(*stats,inplace=True)
+                            ])
+    test_transform = transforms.Compose([
+                            transforms.ToTensor(), 
+                            transforms.Normalize(*stats)
+                            ])
+
+    train_data = CIFAR100(root = args.data_path, train = True, download = args.download_data, transform = train_transform)
+    test_data = CIFAR100(root = args.data_path, train = False, download = args.download_data, transform = test_transform)
     
     train_data_len = len(train_data)
     random_permute = np.random.permutation(train_data_len)
@@ -105,7 +122,7 @@ if __name__ == "__main__":
         if args.architecture_search:
 
             model_config = cfgs[args.model_config]
-            pool_search_space = PoolSearchSpace("vgg19", model_config, num_configs = args.num_configs)
+            pool_search_space = PoolSearchSpace(args.model_name, model_config, num_configs = args.num_configs)
             pool_search_space.create_search_space()
 
             trainer = NASTrainer(train_dataloader, validation_dataloader, test_dataloader, pool_search_space.search_space, 
@@ -117,7 +134,8 @@ if __name__ == "__main__":
                         batch_sampling_size = args.batch_sampling_size, visualisation_dir = args.visualisation_dir, seed = args.seed,
                         exponential_moving_average = args.exponential_moving_average, discount_factor = args.discount_factor,
                         normalise_prob_dist = args.normalise_prob_dist, track_running_stats = args.track_running_stats,
-                        temperature_epoch_scaling = args.temperature_epoch_scaling, dynamic_temperature = args.dynamic_temperature)
+                        temperature_epoch_scaling = args.temperature_epoch_scaling, dynamic_temperature = args.dynamic_temperature, 
+                        sample_binomial = args.sample_binomial)
             train_accuracy, validation_accuracy, test_accuracy = trainer.train()
             
             train_accuracies.append(train_accuracy)
@@ -130,6 +148,24 @@ if __name__ == "__main__":
                 print(f"{idx}: {architecture}")
             
             print("\n")
+
+        elif args.hierarchical_search:
+
+            ## input test
+            # ipt_data = "iris.dat"
+            # ipt_data = "iris_dataset1.txt"
+            # ipt_k = 3
+            
+            model_config = cfgs[args.model_config]
+            hierarchical_search_space = HierarchicalSearchSpace(args.model_name, model_config, num_classes = args.num_classes, 
+                                    num_configs = args.num_configs, init_weights = args.init_weights, device = device, 
+                                    dropout = args.dropout, batch_norm = args.batch_norm, weights = None, progress = args.progress, 
+                                    track_running_stats = args.track_running_stats, dataloader = train_dataloader, 
+                                    batch_size = args.batch_size, distance_type = args.distance_type, linkage_type = args.linkage_type, 
+                                    num_clusters = args.num_clusters)
+            
+            hierarchical_search_space.create_search_space()
+            hierarchical_search_space.cluster_search_space()
 
         else:
 

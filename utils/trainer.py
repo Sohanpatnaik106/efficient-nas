@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
+from random import choices
 from src.loss import NASLoss
 from src.model import BaseModel, _vgg
 from .visualise import plot_sampling_prob_dist, plot_loss, plot_accuracy
@@ -137,6 +138,9 @@ class Trainer():
         loss = total_loss / (i+1)
         return accuracy, loss
 
+
+
+
 class NASTrainer():
 
     def __init__(self, train_dataloader, validation_dataloader, test_dataloader, search_space, model_name, 
@@ -146,7 +150,7 @@ class NASTrainer():
                 prob_dist = "maximum", eval_all = False, batch_update = True, batch_sampling_size = 30,
                 visualisation_dir = "./visualisation/epoch_sample", seed = 0, exponential_moving_average = False, 
                 discount_factor = 0.9, normalise_prob_dist = True, track_running_stats = False, temperature_epoch_scaling = 50,
-                dynamic_temperature = True):
+                dynamic_temperature = True, sample_binomial = True):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -178,6 +182,7 @@ class NASTrainer():
         self.track_running_stats = track_running_stats
         self.temperature_epoch_scaling = temperature_epoch_scaling
         self.dynamic_temperature = dynamic_temperature
+        self.sample_binomial = sample_binomial
 
         self.visualisation_dir = visualisation_dir
         if not os.path.exists(self.visualisation_dir):
@@ -195,6 +200,10 @@ class NASTrainer():
         elif self.prob_dist == "maximum":
             self.sample_probabilities = np.ones((self.num_configs), dtype = np.float32)
 
+        self.indices = np.zeros((self.num_configs))
+        for i in range(self.num_configs):
+            self.indices[i] = i
+
     # NOTE: Everytime a new model is sampled, re initialise the optimizer    
     def set_optimizer(self, model):
         if self.optimizer_type == "Adam":
@@ -209,15 +218,21 @@ class NASTrainer():
             self.temperature = self.temperature * np.exp(- epoch_number / self.temperature_epoch_scaling)
     
     def sample_architecture(self):
-
-        sample_idx = np.argmax(self.sample_probabilities)
-        all_idx = np.where(self.sample_probabilities == self.sample_probabilities[sample_idx])
-        if all_idx[0].shape[0] == 1:
+        
+        if self.sample_binomial:
+            sample_idx = choices(self.indices, self.sample_probabilities, k = 1)
+            sample_idx = int(sample_idx[0])
             return sample_idx, self.search_space[str(sample_idx)]
-        else:
-            random_idx = np.random.randint(0, all_idx[0].shape[0])
-            sample_idx = all_idx[0][random_idx]
-            return sample_idx, self.search_space[str(sample_idx)]
+        
+        else: 
+            sample_idx = np.argmax(self.sample_probabilities)
+            all_idx = np.where(self.sample_probabilities == self.sample_probabilities[sample_idx])
+            if all_idx[0].shape[0] == 1:
+                return sample_idx, self.search_space[str(sample_idx)]
+            else:
+                random_idx = np.random.randint(0, all_idx[0].shape[0])
+                sample_idx = all_idx[0][random_idx]
+                return sample_idx, self.search_space[str(sample_idx)]
 
     def create_model(self, model, model_config):
 
@@ -229,7 +244,8 @@ class NASTrainer():
                         dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress,
                         track_running_stats = self.track_running_stats)
         new_model = self.copy_parameters(model, new_model)
-    
+
+        del model
         return new_model
 
     def copy_parameters(self, model, new_model):
@@ -237,6 +253,7 @@ class NASTrainer():
         for (name, param), (name_new, param_new) in zip(model.named_parameters(), new_model.named_parameters()):
             param_new.data = param.data
 
+        del model
         return new_model
 
     def update_sampling_likelihood(self, model, sample_index, dataloader_type = "train", eval_all = False):
@@ -279,7 +296,11 @@ class NASTrainer():
     def train(self):
         
         # TODO: Don't hardcode initial model configuration
-        initial_model_config = self.search_space["0"]
+        # initial_model_config = self.search_space["0"]
+        sample_idx = choices(self.indices, self.sample_probabilities, k = 1)
+        sample_idx = int(sample_idx[0])
+        initial_model_config = self.search_space[str(sample_idx)]
+
         model = BaseModel(self.model_name, initial_model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
                         dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress,
                         track_running_stats = self.track_running_stats)
@@ -295,8 +316,7 @@ class NASTrainer():
                 model = self.create_model(model, model_config)
                 model.to(self.device)
             else:
-                sample_idx = 0
-                model_config = self.search_space["0"]
+                model_config = self.search_space[str(sample_idx)]
             
             optimizer = self.set_optimizer(model)
             total_loss = 0
@@ -330,22 +350,22 @@ class NASTrainer():
                         model.to(self.device)
 
             # NOTE: Probability can be updated after every fixed number of batches instead of epochs
-            if not self.batch_update:
-                print("\n")
-                self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
-                print("\n")
-                train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
-                validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
-                test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
+            # if not self.batch_update:
+            print("\n")
+            self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
+            print("\n")
+            train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
+            validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
+            test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
 
-                print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
+            print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
 
-                training_accuracies.append(train_accuracy)
-                validation_accuracies.append(validation_accuracy)
-                test_accuracies.append(test_accuracy)
-                training_losses.append(train_loss)
-                validation_losses.append(validation_loss)
-                test_losses.append(test_loss)
+            training_accuracies.append(train_accuracy)
+            validation_accuracies.append(validation_accuracy)
+            test_accuracies.append(test_accuracy)
+            training_losses.append(train_loss)
+            validation_losses.append(validation_loss)
+            test_losses.append(test_loss)
 
             # Plot the probability distribution after every epoch
             plot_sampling_prob_dist(self.sample_probabilities, epoch+1, self.num_configs, self.visualisation_dir)
@@ -355,8 +375,14 @@ class NASTrainer():
         plot_loss(training_losses, validation_losses, test_losses, self.visualisation_dir, num_epochs = self.num_epochs)
         plot_accuracy(training_accuracies, validation_accuracies, test_accuracies, self.visualisation_dir, num_epochs = self.num_epochs)
 
-        return training_accuracies[-1], validation_accuracies[-1], test_accuracies[-1]
-    
+        best_configs = self.get_best_configuration()
+        for idx, config in best_configs.items():
+            model = self.create_model(model, config)
+            train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = idx)
+            validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "validation", model_idx = idx)
+            test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = idx)
+
+        return train_accuracy, validation_accuracy, test_accuracy
     
     def evaluate(self, model, dataloader_type = "train", model_idx = "0"):
 
@@ -402,6 +428,23 @@ class NASTrainer():
             best_configs[str(idx)] = self.search_space[str(idx)]
         
         return best_configs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # TODO: Take as input, the hierarchy of the architectures, update the sampling function and likelihood update.
@@ -469,6 +512,7 @@ class HNASTrainer():
         if self.optimizer_type == "Adam":
             optimizer = torch.optim.Adam(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
 
+        del model
         return optimizer
 
     def update_temperature(self, epoch_number):
@@ -498,7 +542,8 @@ class HNASTrainer():
                         dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress,
                         track_running_stats = self.track_running_stats)
         new_model = self.copy_parameters(model, new_model)
-    
+
+        del model    
         return new_model
 
     def copy_parameters(self, model, new_model):
@@ -506,6 +551,7 @@ class HNASTrainer():
         for (name, param), (name_new, param_new) in zip(model.named_parameters(), new_model.named_parameters()):
             param_new.data = param.data
 
+        del model
         return new_model
 
     def update_sampling_likelihood(self, model, sample_index, dataloader_type = "train", eval_all = False):
@@ -599,22 +645,22 @@ class HNASTrainer():
                         model.to(self.device)
 
             # NOTE: Probability can be updated after every fixed number of batches instead of epochs
-            if not self.batch_update:
-                print("\n")
-                self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
-                print("\n")
-                train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
-                validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
-                test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
+            # if not self.batch_update:
+            print("\n")
+            self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
+            print("\n")
+            train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
+            validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
+            test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
 
-                print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
+            print(f"\nModel {sample_idx}: \nTrain accuracy: {train_accuracy: .4f}, Validation accuracy: {validation_accuracy:.4f}, Test_accuracy: {test_accuracy: .4f}\n")
 
-                training_accuracies.append(train_accuracy)
-                validation_accuracies.append(validation_accuracy)
-                test_accuracies.append(test_accuracy)
-                training_losses.append(train_loss)
-                validation_losses.append(validation_loss)
-                test_losses.append(test_loss)
+            training_accuracies.append(train_accuracy)
+            validation_accuracies.append(validation_accuracy)
+            test_accuracies.append(test_accuracy)
+            training_losses.append(train_loss)
+            validation_losses.append(validation_loss)
+            test_losses.append(test_loss)
 
             # Plot the probability distribution after every epoch
             plot_sampling_prob_dist(self.sample_probabilities, epoch+1, self.num_configs, self.visualisation_dir)

@@ -53,6 +53,9 @@ class BaseModel(nn.Module):
     def forward(self, images):
         return self.model(images)
 
+    def feature_forward(self, images):
+        return self.model.feature_forward(images)
+
 class VGG(nn.Module):
     def __init__(
         self, features: nn.Module, num_classes: int = 1000, init_weights: bool = True, dropout: float = 0.5
@@ -96,6 +99,14 @@ class VGG(nn.Module):
         x = torch.flatten(x, 1)
         x = self.classifier(x)
         
+        return x
+
+    def feature_forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        x = self.features(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+
         return x
 
 def make_layers(cfg: str, batch_norm: bool = False, track_running_stats: bool = False) -> nn.Sequential:
