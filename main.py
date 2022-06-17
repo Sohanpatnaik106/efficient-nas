@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
     train_transform = transforms.Compose([
-                            transforms.RandomCrop(32, padding=4,padding_mode='reflect'), 
+                            transforms.RandomCrop(32, padding = 4,padding_mode = 'reflect'), 
                             transforms.RandomHorizontalFlip(), 
                             transforms.ToTensor(), 
                             transforms.Normalize(*stats,inplace=True)
