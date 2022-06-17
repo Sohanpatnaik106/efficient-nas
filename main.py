@@ -33,7 +33,7 @@ if __name__ == "__main__":
     parser.add_argument("--exponential_moving_average", default = False, type = bool)
     parser.add_argument("--eval_all", default = False, type = bool)
     parser.add_argument("--gpuid", default = 0, type = int)
-    parser.add_argument("--hierarchical_search", default = True, type = bool)
+    parser.add_argument("--hierarchical_search", default = False, type = bool)
     parser.add_argument("--init_weights", default = True, type = bool)
     parser.add_argument("--learning_rate", default = 1e-4, type = float)
     parser.add_argument("--linkage_type", default = "single", type = str)
@@ -69,8 +69,8 @@ if __name__ == "__main__":
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
 
-    # log_out = os.path.join(args.log_dir, 'output.log')
-    # sys.stdout = Logger(log_out)
+    log_out = os.path.join(args.log_dir, 'output.log')
+    sys.stdout = Logger(log_out)
     
     print("\nArguments List:\n")
     for key, val in vars(args).items():

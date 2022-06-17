@@ -379,8 +379,9 @@ class NASTrainer():
         for idx, config in best_configs.items():
             model = self.create_model(model, config)
             train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = idx)
-            validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "validation", model_idx = idx)
+            validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = idx)
             test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = idx)
+            break
 
         return train_accuracy, validation_accuracy, test_accuracy
     
