@@ -1,6 +1,8 @@
+import os
 import random
 from copy import deepcopy
 from .clustering import HierarchicalClustering
+from scipy.cluster import hierarchy
 
 class PoolSearchSpace():
 
@@ -54,7 +56,8 @@ class HierarchicalSearchSpace():
 
     def __init__(self, model_name, model_config, num_classes = 100, num_configs = 1000, init_weights = True, device = "cpu",
 				dropout = 0.5, batch_norm = True, weights = None, progress = True, track_running_stats = False, 
-                dataloader = None, batch_size = 256, distance_type = "euclidean", linkage_type = "single", num_clusters = 5):
+                dataloader = None, batch_size = 256, distance_type = "euclidean", linkage_type = "single", num_clusters = 5,
+                visualisation_dir = None):
 
         self.model_name = model_name
         self.model_config = model_config
@@ -74,6 +77,10 @@ class HierarchicalSearchSpace():
         self.linkage_type = linkage_type
 
         self.num_clusters = num_clusters
+        self.visualisation_dir = visualisation_dir
+
+        if not os.path.exists(self.visualisation_dir):
+            os.makedirs(self.visualisation_dir)
 
         self.search_space = {}
         self.cluster_dict = {}
@@ -122,8 +129,19 @@ class HierarchicalSearchSpace():
 					                    dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress, 
 					                    track_running_stats = self.track_running_stats, dataloader = self.dataloader, search_space = self.search_space, 
                                         batch_size = self.batch_size, distance_type = self.distance_type, linkage_type = self.linkage_type, 
-                                        num_clusters = self.num_clusters)
+                                        num_clusters = self.num_clusters, visualisation_dir = self.visualisation_dir)
 
-        self.cluster_dict, self.distance_matrix = hierarchical_clustering.cluster()
-        print(self.cluster_dict)
-        print(self.distance_matrix)
+        hierarchy_tree = hierarchical_clustering.cluster()
+
+        print(hierarchy_tree)
+        
+
+        if hierarchy_tree.is_valid_linkage(z) == False:
+            raise Exception("linkage is not valid")
+
+        rootNode, nodelist = hierarchy.to_tree(hierarchy_tree, rd = True)
+
+        
+        # self.cluster_dict, self.distance_matrix = hierarchical_clustering.cluster()
+        # print(self.cluster_dict)
+        # print(self.distance_matrix)

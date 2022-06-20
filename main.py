@@ -86,10 +86,10 @@ if __name__ == "__main__":
 
     stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
     train_transform = transforms.Compose([
-                            transforms.RandomCrop(32, padding = 4,padding_mode = 'reflect'), 
+                            transforms.RandomCrop(32, padding = 4, padding_mode = 'reflect'), 
                             transforms.RandomHorizontalFlip(), 
                             transforms.ToTensor(), 
-                            transforms.Normalize(*stats,inplace=True)
+                            transforms.Normalize(*stats, inplace = True)
                             ])
     test_transform = transforms.Compose([
                             transforms.ToTensor(), 
@@ -162,7 +162,7 @@ if __name__ == "__main__":
                                     dropout = args.dropout, batch_norm = args.batch_norm, weights = None, progress = args.progress, 
                                     track_running_stats = args.track_running_stats, dataloader = train_dataloader, 
                                     batch_size = args.batch_size, distance_type = args.distance_type, linkage_type = args.linkage_type, 
-                                    num_clusters = args.num_clusters)
+                                    num_clusters = args.num_clusters, visualisation_dir = args.visualisation_dir)
             
             hierarchical_search_space.create_search_space()
             hierarchical_search_space.cluster_search_space()
