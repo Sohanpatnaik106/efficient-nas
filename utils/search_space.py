@@ -1,8 +1,10 @@
+from logging import root
 import os
 import random
 from copy import deepcopy
 from .clustering import HierarchicalClustering
 from scipy.cluster import hierarchy
+from src.tree import Tree
 
 class PoolSearchSpace():
 
@@ -86,6 +88,9 @@ class HierarchicalSearchSpace():
         self.cluster_dict = {}
         self.distance_matrix = None
 
+        self.cluster_tree = None
+        self.cluster_root = None
+        self.cluster_nodelist = None
 
     def count_maxpool_layers(self):
         count = 0
@@ -133,15 +138,18 @@ class HierarchicalSearchSpace():
 
         hierarchy_tree = hierarchical_clustering.cluster()
 
-        print(hierarchy_tree)
-        
-
-        if hierarchy_tree.is_valid_linkage(z) == False:
+        if hierarchy.is_valid_linkage(hierarchy_tree) == False:
             raise Exception("linkage is not valid")
 
         rootNode, nodelist = hierarchy.to_tree(hierarchy_tree, rd = True)
 
-        
-        # self.cluster_dict, self.distance_matrix = hierarchical_clustering.cluster()
-        # print(self.cluster_dict)
-        # print(self.distance_matrix)
+        tree = Tree(rootNode, nodelist)
+
+        root = tree.construct_tree(rootNode)
+        tree.node = root
+        tree.left = root.left
+        tree.right = root.right
+
+        self.cluster_tree = tree
+        self.cluster_root = root
+        self.cluster_nodelist = tree.cluster_nodelist

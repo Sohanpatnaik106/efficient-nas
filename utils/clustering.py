@@ -11,6 +11,7 @@ from scipy.spatial.distance import squareform
 import numpy as np 
 import treelib
 from .visualise import plot_hierarchy_dendogram
+import random
 
 class HierarchicalClustering():
 
@@ -81,7 +82,9 @@ class HierarchicalClustering():
 				if self.distance_type == "euclidean":
 					distance += self.euclidean_distance(outputsA.detach(), outputsB.detach())
 
-			distance /= self.datasize
+				break
+			# NOTE: Update this on compute canada
+			distance /= self.batch_size
 
 		del modelA
 		del modelB
@@ -96,7 +99,12 @@ class HierarchicalClustering():
 				if i >= j:
 					continue
 
-				distance = self.compute_pairwise_distance(configA, configB)
+				# NOTE: Uncomment in compute canada
+				# distance = self.compute_pairwise_distance(configA, configB)
+				if i == j:
+					distance = 0
+				else:
+					distance = random.uniform(0, 1)
 				self.distance_matrix[i][j] = distance
 				self.distance_matrix[j][i] = distance
 		
