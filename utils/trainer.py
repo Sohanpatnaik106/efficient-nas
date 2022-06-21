@@ -459,7 +459,8 @@ class HNASTrainer():
                 prob_dist = "maximum", eval_all = False, batch_update = True, batch_sampling_size = 30,
                 visualisation_dir = "./visualisation/epoch_sample", seed = 0, exponential_moving_average = False, 
                 discount_factor = 0.9, normalise_prob_dist = True, track_running_stats = False, temperature_epoch_scaling = 50,
-                dynamic_temperature = True):
+                dynamic_temperature = True, cluster_tree = None, cluster_root = None, cluster_nodelist = None,
+                sample_binomial = True):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -492,6 +493,12 @@ class HNASTrainer():
         self.temperature_epoch_scaling = temperature_epoch_scaling
         self.dynamic_temperature = dynamic_temperature
 
+        self.cluster_tree = cluster_tree
+        self.cluster_root = cluster_root
+        self.cluster_nodelist = cluster_nodelist
+
+        self.sample_binomial = sample_binomial
+
         self.visualisation_dir = visualisation_dir
         if not os.path.exists(self.visualisation_dir):
             os.makedirs(self.visualisation_dir)
@@ -508,6 +515,9 @@ class HNASTrainer():
         elif self.prob_dist == "maximum":
             self.sample_probabilities = np.ones((self.num_configs), dtype = np.float32)
 
+        self.sampled_nodes = []
+        self.sample_idx = None
+
     # NOTE: Everytime a new model is sampled, re initialise the optimizer    
     def set_optimizer(self, model):
         if self.optimizer_type == "Adam":
@@ -522,16 +532,35 @@ class HNASTrainer():
         else:
             self.temperature = self.temperature * np.exp(- epoch_number / self.temperature_epoch_scaling)
     
+    # NOTE: Implement this function using the cluster tree, cluster node
+
+    def sample_nodes(self, node):
+
+        self.sampled_nodes.append(node)
+        if node.get_id() <= self.num_configs:
+            self.sample_idx = node.get_id()
+
+        if not node.get_left() and not node.get_right():
+            return 
+
+        sample_probabilities = np.array([node.get_left().get_sample_probability(), node.get_right().get_sample_probability()])
+        indices = np.array([0, 1])
+        sample_idx = choices(indices, sample_probabilities, k = 1)
+        if sample_idx == 0:
+            self.sample_nodes(node.get_left())
+        else:
+            self.sample_nodes(node.get_right())
+
     def sample_architecture(self):
 
-        sample_idx = np.argmax(self.sample_probabilities)
-        all_idx = np.where(self.sample_probabilities == self.sample_probabilities[sample_idx])
-        if all_idx[0].shape[0] == 1:
-            return sample_idx, self.search_space[str(sample_idx)]
-        else:
-            random_idx = np.random.randint(0, all_idx[0].shape[0])
-            sample_idx = all_idx[0][random_idx]
-            return sample_idx, self.search_space[str(sample_idx)]
+        if self.sample_binomial:
+            self.sampled_nodes = []
+            self.sample_nodes(self.cluster_root)
+            return self.sample_idx, self.search_space[str(self.sample_idx)]
+        
+        # TODO: Implement sampling with maximum probability, not likely
+        else: 
+            raise NotImplementedError
 
     def create_model(self, model, model_config):
 
@@ -555,47 +584,40 @@ class HNASTrainer():
         del model
         return new_model
 
+    # NOTE: Update this function using cluster tree and cluster root
     def update_sampling_likelihood(self, model, sample_index, dataloader_type = "train", eval_all = False):
         # sample_probabilities[sample_idx] = sample
         # TODO: How to update the probabilities using the accuracy
         # NOTE: As of now, calculating accuracy of all the configurations
         # and updating the likelihood
         
-        # TODO: Update the eval all part 
+        # TODO: Implement the eval all part 
         if eval_all:
-            accuracies = []
-            for idx, model_config in self.search_space.items():
+            raise NotImplementedError
 
-                new_model = BaseModel(self.model_name, model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
-                                    dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
-                new_model = self.copy_parameters(model, new_model)
-
-                accuracy, loss = self.evaluate(new_model, model_idx = idx)
-                accuracies.append(accuracy)
-
-            accuracies = np.array(accuracies)
-            self.sample_probabilities = np.exp(self.sample_probabilities * accuracies)
-            self.sample_probabilities = self.sample_probabilities / np.sum(self.sample_probabilities)
         else:
             accuracy, loss = self.evaluate(model, model_idx = sample_index)
-            if self.exponential_moving_average:
-                self.sample_probabilities[sample_index] = self.discount_factor * self.sample_probabilities[sample_index] \
-                                                                        + (1 - self.discount_factor) * accuracy
-            elif not self.exponential_moving_average:
-                self.sample_probabilities[sample_index] = accuracy
+            for node in self.sampled_nodes:
 
-            # NOTE: Do not normalise now, normalise it into a distribution after some number of epochs of training.
-            if self.normalise_prob_dist:
-                acc = np.ones(self.sample_probabilities.shape[0])
                 if self.exponential_moving_average:
-                    acc[sample_index] = accuracy
-                self.sample_probabilities = np.exp((self.sample_probabilities * acc) / self.temperature) \
-                                                        / np.sum(np.exp((self.sample_probabilities * acc) / self.temperature))
+                    node.sample_probability = self.discount_factor * node.sample_probability + (1 - self.discount_factor) * accuracy
+                elif not self.exponential_moving_average:
+                    node.sample_probability = accuracy
+
+            # TODO: Implement normalisation of probabilities at each level
+            
+            # NOTE: Do not normalise now, normalise it into a distribution after some number of epochs of training.
+            # if self.normalise_prob_dist:
+            #     acc = np.ones(self.sample_probabilities.shape[0])
+            #     if self.exponential_moving_average:
+            #         acc[sample_index] = accuracy
+            #     self.sample_probabilities = np.exp((self.sample_probabilities * acc) / self.temperature) \
+            #                                             / np.sum(np.exp((self.sample_probabilities * acc) / self.temperature))
 
     def train(self):
-        
-        # TODO: Don't hardcode initial model configuration
-        initial_model_config = self.search_space["0"]
+
+        sample_idx, initial_model_config = self.sample_architecture()
+
         model = BaseModel(self.model_name, initial_model_config, num_classes = self.num_classes, init_weights = self.init_weights, 
                         dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress,
                         track_running_stats = self.track_running_stats)
@@ -611,8 +633,7 @@ class HNASTrainer():
                 model = self.create_model(model, model_config)
                 model.to(self.device)
             else:
-                sample_idx = 0
-                model_config = self.search_space["0"]
+                model_config = self.search_space[str(sample_idx)]
             
             optimizer = self.set_optimizer(model)
             total_loss = 0
@@ -671,7 +692,15 @@ class HNASTrainer():
         plot_loss(training_losses, validation_losses, test_losses, self.visualisation_dir, num_epochs = self.num_epochs)
         plot_accuracy(training_accuracies, validation_accuracies, test_accuracies, self.visualisation_dir, num_epochs = self.num_epochs)
 
-        return training_accuracies[-1], validation_accuracies[-1], test_accuracies[-1]
+        best_configs = self.get_best_configuration()
+        for idx, config in best_configs.items():
+            model = self.create_model(model, config)
+            train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = idx)
+            validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = idx)
+            test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = idx)
+            break
+
+        return train_accuracy, validation_accuracy, test_accuracy
     
     
     def evaluate(self, model, dataloader_type = "train", model_idx = "0"):

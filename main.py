@@ -12,7 +12,7 @@ from data.dataloader import CIFAR100
 from torch.utils.data import DataLoader
 from utils.search_space import PoolSearchSpace, HierarchicalSearchSpace
 
-from utils.trainer import Trainer, NASTrainer
+from utils.trainer import HNASTrainer, Trainer, NASTrainer
 
 if __name__ == "__main__":
 
@@ -166,6 +166,31 @@ if __name__ == "__main__":
             
             hierarchical_search_space.create_search_space()
             hierarchical_search_space.cluster_search_space()
+
+            trainer = HNASTrainer(train_dataloader, validation_dataloader, test_dataloader, hierarchical_search_space.search_space, 
+                args.model_name, num_classes = args.num_classes, init_weights = args.init_weights, dropout = args.dropout, 
+                batch_norm = args.batch_norm, weights = None, progress = args.progress, num_epochs = args.num_epochs, 
+                learning_rate = args.learning_rate, weight_decay = args.weight_decay, device = device, optimizer_type = args.optimizer_type, 
+                criterion_type = args.criterion_type, temperature = args.temperature, prob_dist = args.prob_dist, eval_all = args.eval_all, 
+                batch_update = args.batch_update, batch_sampling_size = args.batch_sampling_size, visualisation_dir = args.visualisation_dir,
+                seed = args.seed, exponential_moving_average = args.exponential_moving_average, discount_factor = args.discount_factor, 
+                normalise_prob_dist = args.normalise_prob_dist, track_running_stats = args.track_running_stats, 
+                temperature_epoch_scaling = args.temperature_epoch_scaling, dynamic_temperature = args.dynamic_temperature, 
+                cluster_tree = hierarchical_search_space.cluster_tree, cluster_root = hierarchical_search_space.cluster_root, 
+                cluster_nodelist = hierarchical_search_space.cluster_nodelist, sample_binomial = args.sample_binomial)
+
+            train_accuracy, validation_accuracy, test_accuracy = trainer.train()
+            
+            train_accuracies.append(train_accuracy)
+            validation_accuracies.append(validation_accuracy)
+            test_accuracies.append(test_accuracy)
+
+            best_pooling_configurations = trainer.get_best_configuration()
+            print("\nBest Pooling Configuration:\n")
+            for idx, architecture in best_pooling_configurations.items():
+                print(f"{idx}: {architecture}")
+            
+            print("\n")
 
         else:
 
