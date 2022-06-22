@@ -523,7 +523,6 @@ class HNASTrainer():
         if self.optimizer_type == "Adam":
             optimizer = torch.optim.Adam(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
 
-        del model
         return optimizer
 
     def update_temperature(self, epoch_number):
