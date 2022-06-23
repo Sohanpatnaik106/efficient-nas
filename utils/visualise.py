@@ -5,7 +5,10 @@ from scipy.spatial.distance import squareform
 from scipy.cluster.hierarchy import dendrogram, linkage, ward
 
 # num_configs is search_space.shape[0]
-def plot_sampling_prob_dist(sampling_probabilities, epoch_number, num_configs, visualisation_dir):
+def plot_sampling_prob_dist(sampling_probabilities, epoch_number, num_configs, visualisation_dir, normalise = True, temperature = None):
+
+    if normalise:
+        
 
     plt.figure(figsize = (10, 5))
     plt.title(f"Sampling Probability Distribution after {epoch_number} epoch(s)")

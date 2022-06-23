@@ -220,13 +220,24 @@ class NASTrainer():
     def sample_architecture(self):
         
         if self.sample_binomial:
-            sample_idx = choices(self.indices, self.sample_probabilities, k = 1)
+            sample_probabilities = self.sample_probabilities
+            if self.normalise_prob_dist:
+                sample_probabilities = np.exp(sample_probabilities / self.temperature) \
+                                            / np.sum(np.exp(sample_probabilities / self.temperature))
+            
+            sample_idx = choices(self.indices, sample_probabilities, k = 1)
             sample_idx = int(sample_idx[0])
             return sample_idx, self.search_space[str(sample_idx)]
         
         else: 
-            sample_idx = np.argmax(self.sample_probabilities)
-            all_idx = np.where(self.sample_probabilities == self.sample_probabilities[sample_idx])
+
+            sample_probabilities = self.sample_probabilities
+            if self.normalise_prob_dist:
+                sample_probabilities = np.exp(sample_probabilities / self.temperature) \
+                                            / np.sum(np.exp(sample_probabilities / self.temperature))
+            
+            sample_idx = np.argmax(sample_probabilities)
+            all_idx = np.where(sample_probabilities == sample_probabilities[sample_idx])
             if all_idx[0].shape[0] == 1:
                 return sample_idx, self.search_space[str(sample_idx)]
             else:
@@ -286,12 +297,20 @@ class NASTrainer():
                 self.sample_probabilities[sample_index] = accuracy
 
             # NOTE: Do not normalise now, normalise it into a distribution after some number of epochs of training.
-            if self.normalise_prob_dist:
-                acc = np.ones(self.sample_probabilities.shape[0])
-                if self.exponential_moving_average:
-                    acc[sample_index] = accuracy
-                self.sample_probabilities = np.exp((self.sample_probabilities * acc) / self.temperature) \
-                                                        / np.sum(np.exp((self.sample_probabilities * acc) / self.temperature))
+            # if self.normalise_prob_dist:
+            #     acc = np.ones(self.sample_probabilities.shape[0])
+            #     if self.exponential_moving_average:
+            #         acc[sample_index] = accuracy
+            #     self.sample_probabilities = np.exp((self.sample_probabilities * acc) / self.temperature) \
+            #                                             / np.sum(np.exp((self.sample_probabilities * acc) / self.temperature))
+
+            """
+                1, 1, 1, 1, 1
+                1, 0.905, 1, 1, 1 ==> 0.2, 0.18, 0.2, 0.2, 0.2
+            
+            # NOTE: Sample with normalised probabilities but update using the previous values. 
+
+            """
 
     def train(self):
         
@@ -368,7 +387,8 @@ class NASTrainer():
             test_losses.append(test_loss)
 
             # Plot the probability distribution after every epoch
-            plot_sampling_prob_dist(self.sample_probabilities, epoch+1, self.num_configs, self.visualisation_dir)
+            plot_sampling_prob_dist(self.sample_probabilities, epoch+1, self.num_configs, self.visualisation_dir, 
+                                    normalise = self.normalise_prob_dist, temperature = self.temperature)
             if self.dynamic_temperature:
                 self.update_temperature(epoch)
 
