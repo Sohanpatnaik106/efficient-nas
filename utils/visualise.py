@@ -8,6 +8,8 @@ from scipy.cluster.hierarchy import dendrogram, linkage, ward
 def plot_sampling_prob_dist(sampling_probabilities, epoch_number, num_configs, visualisation_dir, normalise = True, temperature = None):
 
     if normalise:
+        sampling_probabilities = np.exp(sampling_probabilities / temperature) \
+                                            / np.sum(np.exp(sampling_probabilities / temperature))
         
 
     plt.figure(figsize = (10, 5))
@@ -63,4 +65,26 @@ def plot_hierarchy_dendogram(hierarchy_tree, labels, visualisation_dir):
         labels = labels,
     )
     plt.savefig(os.path.join(visualisation_dir, "dendrogram.png"), bbox_inches = 'tight')
+    plt.clf()
+
+def plot_hierarchical_sampling_prob_dist(cluster_nodelist, epoch_number, num_configs, visualisation_dir, normalise = True, temperature = None):
+
+    sampling_probabilities = np.zeros(num_configs)
+    for node in cluster_nodelist:
+        if node.get_id() < num_configs:
+            sampling_probabilities[node.get_id()] = node.get_sample_probability()
+
+    if normalise:
+        sampling_probabilities = np.exp(sampling_probabilities / temperature) \
+                                            / np.sum(np.exp(sampling_probabilities / temperature))
+        
+
+    plt.figure(figsize = (10, 5))
+    plt.title(f"Sampling Probability Distribution after {epoch_number} epoch(s)")
+    architecture_indices = np.arange(num_configs)
+    
+    plt.bar(architecture_indices, sampling_probabilities, color = "blue")
+    plt.xlabel("Architecture Indices")
+    plt.ylabel("Sampling Probabilities")
+    plt.savefig(os.path.join(visualisation_dir, f"{epoch_number}.png"))
     plt.clf()

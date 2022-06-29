@@ -6,7 +6,7 @@ from tqdm import tqdm
 from random import choices
 from src.loss import NASLoss
 from src.model import BaseModel, _vgg
-from .visualise import plot_sampling_prob_dist, plot_loss, plot_accuracy
+from .visualise import plot_sampling_prob_dist, plot_loss, plot_accuracy, plot_hierarchical_sampling_prob_dist
 
 # TODO: Implement the batch wise updation of sampling likelihoods. 
 # Change the print and progress bar structure.
@@ -565,7 +565,8 @@ class HNASTrainer():
         sample_probabilities = np.array([node.get_left().get_sample_probability(), node.get_right().get_sample_probability()])
         indices = np.array([0, 1])
         sample_idx = choices(indices, sample_probabilities, k = 1)
-        if sample_idx == 0:
+
+        if sample_idx[0] == 0:
             self.sample_nodes(node.get_left())
         else:
             self.sample_nodes(node.get_right())
@@ -704,7 +705,7 @@ class HNASTrainer():
             test_losses.append(test_loss)
 
             # Plot the probability distribution after every epoch
-            plot_sampling_prob_dist(self.sample_probabilities, epoch+1, self.num_configs, self.visualisation_dir)
+            plot_hierarchical_sampling_prob_dist(self.cluster_nodelist, epoch+1, self.num_configs, self.visualisation_dir, normalise = self.normalise_prob_dist, temperature = self.temperature)
             if self.dynamic_temperature:
                 self.update_temperature(epoch)
 

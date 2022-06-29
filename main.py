@@ -79,25 +79,25 @@ if __name__ == "__main__":
 
     device = torch.device(f"cuda:{args.gpuid}" if torch.cuda.is_available() else 'cpu')
 
-    # transform = transforms.Compose([
-    #                     transforms.ToTensor(),
-    #                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    #                     ])
+    transform = transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                        ])
 
-    stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-    train_transform = transforms.Compose([
-                            transforms.RandomCrop(32, padding = 4, padding_mode = 'reflect'), 
-                            transforms.RandomHorizontalFlip(), 
-                            transforms.ToTensor(), 
-                            transforms.Normalize(*stats, inplace = True)
-                            ])
-    test_transform = transforms.Compose([
-                            transforms.ToTensor(), 
-                            transforms.Normalize(*stats)
-                            ])
+    # stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    # train_transform = transforms.Compose([
+    #                         transforms.RandomCrop(32, padding = 4, padding_mode = 'reflect'), 
+    #                         transforms.RandomHorizontalFlip(), 
+    #                         transforms.ToTensor(), 
+    #                         transforms.Normalize(*stats, inplace = True)
+    #                         ])
+    # test_transform = transforms.Compose([
+    #                         transforms.ToTensor(), 
+    #                         transforms.Normalize(*stats)
+    #                         ])
 
-    train_data = CIFAR100(root = args.data_path, train = True, download = args.download_data, transform = train_transform)
-    test_data = CIFAR100(root = args.data_path, train = False, download = args.download_data, transform = test_transform)
+    train_data = CIFAR100(root = args.data_path, train = True, download = args.download_data, transform = transform)
+    test_data = CIFAR100(root = args.data_path, train = False, download = args.download_data, transform = transform)
     
     train_data_len = len(train_data)
     random_permute = np.random.permutation(train_data_len)
