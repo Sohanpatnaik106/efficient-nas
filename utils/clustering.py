@@ -82,7 +82,6 @@ class HierarchicalClustering():
 				if self.distance_type == "euclidean":
 					distance += self.euclidean_distance(outputsA.detach(), outputsB.detach())
 
-				break
 			# NOTE: Update this on compute canada
 			distance /= self.batch_size
 

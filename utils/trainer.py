@@ -17,7 +17,7 @@ class Trainer():
                 num_classes = 100, init_weights = True, dropout = 0.5, batch_norm = True, 
                 weights = None, progress = True, num_epochs = 180, learning_rate = 1e-4, weight_decay = 1e-4, 
                 device = "cpu", optimizer_type = "Adam", criterion_type = "cross-entropy", temperature = 0.7,
-                visualisation_dir = "./visualisation/base_model", dir_name = "vgg19"):
+                visualisation_dir = "./visualisation/base_model", dir_name = "vgg19", learning_rate_scheduler = False):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -40,6 +40,9 @@ class Trainer():
         self.criterion_type = criterion_type
         self.temperature = temperature
         
+        self.learning_rate_scheduler = learning_rate_scheduler
+        self.scheduler = None
+        
         self.dir_name = dir_name
         self.visualisation_dir = visualisation_dir
         if not os.path.exists(self.visualisation_dir):
@@ -53,7 +56,12 @@ class Trainer():
     def set_optimizer(self, model):
         if self.optimizer_type == "Adam":
             optimizer = torch.optim.Adam(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
+        elif self.optimizer_type == "SGD":
+            optimizer = torch.optim.SGD(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
 
+        if self.learning_rate_scheduler:
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+            
         return optimizer
 
     def train(self):
@@ -85,7 +93,10 @@ class Trainer():
 
                     total_loss += loss.item()
                     tepoch.set_postfix(loss = total_loss / (i+1))
-                    
+            
+            if self.learning_rate_scheduler:
+                self.scheduler.step()
+                  
             train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train")
             validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val")
             test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test")
@@ -150,7 +161,7 @@ class NASTrainer():
                 prob_dist = "maximum", eval_all = False, batch_update = True, batch_sampling_size = 30,
                 visualisation_dir = "./visualisation/epoch_sample", seed = 0, exponential_moving_average = False, 
                 discount_factor = 0.9, normalise_prob_dist = True, track_running_stats = False, temperature_epoch_scaling = 50,
-                dynamic_temperature = True, sample_binomial = True):
+                dynamic_temperature = True, sample_binomial = True, batch_evaluate = False, learning_rate_scheduler = False):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -183,6 +194,10 @@ class NASTrainer():
         self.temperature_epoch_scaling = temperature_epoch_scaling
         self.dynamic_temperature = dynamic_temperature
         self.sample_binomial = sample_binomial
+        self.batch_evaluate = batch_evaluate
+        self.learning_rate_scheduler = learning_rate_scheduler
+        
+        self.scheduler = None
 
         self.visualisation_dir = visualisation_dir
         if not os.path.exists(self.visualisation_dir):
@@ -208,7 +223,12 @@ class NASTrainer():
     def set_optimizer(self, model):
         if self.optimizer_type == "Adam":
             optimizer = torch.optim.Adam(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
+        elif self.optimizer_type == "SGD":
+            optimizer = torch.optim.SGD(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
 
+        if self.learning_rate_scheduler:
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+            
         return optimizer
 
     def update_temperature(self, epoch_number):
@@ -267,7 +287,7 @@ class NASTrainer():
         del model
         return new_model
 
-    def update_sampling_likelihood(self, model, sample_index, dataloader_type = "train", eval_all = False):
+    def update_sampling_likelihood(self, model, sample_index, dataloader_type = "train", eval_all = False, eval_idx = 0):
         # sample_probabilities[sample_idx] = sample
         # TODO: How to update the probabilities using the accuracy
         # NOTE: As of now, calculating accuracy of all the configurations
@@ -282,14 +302,14 @@ class NASTrainer():
                                     dropout = self.dropout, batch_norm = self.batch_norm, weights = self.weights, progress = self.progress)
                 new_model = self.copy_parameters(model, new_model)
 
-                accuracy, loss = self.evaluate(new_model, model_idx = idx)
+                accuracy, loss = self.evaluate(new_model, model_idx = idx, eval_idx = eval_idx)
                 accuracies.append(accuracy)
 
             accuracies = np.array(accuracies)
             self.sample_probabilities = np.exp(self.sample_probabilities * accuracies)
             self.sample_probabilities = self.sample_probabilities / np.sum(self.sample_probabilities)
         else:
-            accuracy, loss = self.evaluate(model, model_idx = sample_index)
+            accuracy, loss = self.evaluate(model, model_idx = sample_index, eval_idx = eval_idx)
             if self.exponential_moving_average:
                 self.sample_probabilities[sample_index] = self.discount_factor * self.sample_probabilities[sample_index] \
                                                                         + (1 - self.discount_factor) * accuracy
@@ -356,9 +376,9 @@ class NASTrainer():
                     tepoch.set_postfix(loss = total_loss / (i+1))
 
                     if self.batch_update and (i+1) % self.batch_sampling_size == 0:
-                        self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all)
+                        self.update_sampling_likelihood(model, sample_idx, dataloader_type = "train", eval_all = self.eval_all, eval_idx = i)
                         print("\n")
-                        train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx))
+                        train_accuracy, train_loss = self.evaluate(model, dataloader_type = "train", model_idx = str(sample_idx), eval_idx = i)
                         validation_accuracy, validation_loss = self.evaluate(model, dataloader_type = "val", model_idx = str(sample_idx))
                         test_accuracy, test_loss = self.evaluate(model, dataloader_type = "test", model_idx = str(sample_idx))
 
@@ -368,6 +388,9 @@ class NASTrainer():
                         model = self.create_model(model, model_config)
                         model.to(self.device)
 
+            if self.learning_rate_scheduler:
+                self.scheduler.step()
+                
             # NOTE: Probability can be updated after every fixed number of batches instead of epochs
             # if not self.batch_update:
             print("\n")
@@ -405,7 +428,7 @@ class NASTrainer():
 
         return train_accuracy, validation_accuracy, test_accuracy
     
-    def evaluate(self, model, dataloader_type = "train", model_idx = "0"):
+    def evaluate(self, model, dataloader_type = "train", model_idx = "0", eval_idx = -1):
 
         if dataloader_type == "train":
             dataloader = self.train_dataloader
@@ -422,7 +445,14 @@ class NASTrainer():
         with tqdm(dataloader, unit = "batch", position = 0, leave = True) as tepoch:
             for i, (images, labels) in enumerate(tepoch):
                 tepoch.set_description(f"Model {model_idx}: Eval on {dataloader_type}")
+                
+                if self.batch_evaluate and eval_idx >= 0 and i != eval_idx:
+                    # print("here")
+                    continue
 
+                # print(self.batch_evaluate)
+                # print(eval_idx)
+                # print(i)
                 outputs = model(images.to(self.device))
                 loss = self.criterion(outputs.to(self.device), labels.to(self.device))
                 total_loss += loss.item()
@@ -435,8 +465,11 @@ class NASTrainer():
                 correct += (predicted == labels.to(self.device)).sum().item()
                 tepoch.set_postfix(acc = correct / total)
 
+        if not self.batch_evaluate:
+            loss = total_loss / (i+1)
+        
         accuracy = correct / total
-        loss = total_loss / (i+1)
+        # loss = total_loss / (i+1)
         return accuracy, loss
 
     def get_best_configuration(self):
@@ -480,7 +513,7 @@ class HNASTrainer():
                 visualisation_dir = "./visualisation/epoch_sample", seed = 0, exponential_moving_average = False, 
                 discount_factor = 0.9, normalise_prob_dist = True, track_running_stats = False, temperature_epoch_scaling = 50,
                 dynamic_temperature = True, cluster_tree = None, cluster_root = None, cluster_nodelist = None,
-                sample_binomial = True):
+                sample_binomial = True, learning_rate_scheduler = False):
 
         self.train_dataloader = train_dataloader
         self.validation_dataloader = validation_dataloader
@@ -512,6 +545,9 @@ class HNASTrainer():
         self.track_running_stats = track_running_stats
         self.temperature_epoch_scaling = temperature_epoch_scaling
         self.dynamic_temperature = dynamic_temperature
+        self.learning_rate_scheduler = learning_rate_scheduler
+        
+        self.scheduler = None
 
         self.cluster_tree = cluster_tree
         self.cluster_root = cluster_root
@@ -543,6 +579,12 @@ class HNASTrainer():
         if self.optimizer_type == "Adam":
             optimizer = torch.optim.Adam(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
 
+        elif self.optimizer_type == "SGD":
+            optimizer = torch.optim.SGD(model.parameters(), lr = self.learning_rate, weight_decay = self.weight_decay)
+
+        if self.learning_rate_scheduler:
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+        
         return optimizer
 
     def update_temperature(self, epoch_number):
@@ -686,6 +728,9 @@ class HNASTrainer():
                         model = self.create_model(model, model_config)
                         model.to(self.device)
 
+            if self.learning_rate_scheduler:
+                self.scheduler.step()
+            
             # NOTE: Probability can be updated after every fixed number of batches instead of epochs
             # if not self.batch_update:
             print("\n")

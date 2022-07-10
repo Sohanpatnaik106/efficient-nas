@@ -46,7 +46,7 @@ class Tree():
             return None
     
         # create a new node with the same data as the root node
-        cluster_node = ClusterNode(node.get_id(), None, None, node.get_count(), 0.5)
+        cluster_node = ClusterNode(node.get_id(), None, None, node.get_count(), 1)
     
         # clone the left and right subtree
         cluster_node.left = self.construct_tree(node.left)

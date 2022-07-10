@@ -135,4 +135,4 @@ dependencies:
   - zipp=3.7.0
   - zlib=1.2.11
   - zstd=1.4.9
-prefix: /home/bt2/18CS10069/anaconda3/envs/nas
+prefix: /home/du4/19CS30052/anaconda3/envs/nas
